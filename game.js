@@ -19,9 +19,9 @@ let userData = { username: "Guest", currency: 0, skinColor: "#0000FF" };
 let gameActive = false;
 let joystickManager = null;
 let workPoints = 0;
-let salaryTimer = 600; // 10 минут (600 сек)
-let collidables = []; // Стены и мебель (Хитбоксы)
-let isRoundSkin = false; // Настройка скина
+let salaryTimer = 600;
+let collidables = [];
+let isRoundSkin = false;
 
 // --- АВТОРИЗАЦИЯ ---
 auth.onAuthStateChanged(user => {
@@ -75,19 +75,17 @@ function switchTab(t) {
     document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('tab-'+t).style.display='block';
-    // Простая логика подсветки
     if(t==='games') document.querySelectorAll('.tab-btn')[0].classList.add('active');
     else document.querySelectorAll('.tab-btn')[1].classList.add('active');
 }
 
-// Настройки
 function openSettings() { document.getElementById('settings-modal').style.display='flex'; }
 function closeSettings() { 
     document.getElementById('settings-modal').style.display='none';
     isRoundSkin = document.getElementById('opt-round-skin').checked;
 }
 
-// --- ИГРА: ПИЦЦЕРИЯ ---
+// --- ИГРА ---
 function startGame() {
     gameActive = true;
     document.getElementById('dashboard').style.display='none';
@@ -96,19 +94,19 @@ function startGame() {
     salaryTimer = 600; 
     collidables = [];
     
-    // Таймер Зарплаты
+    // Чат
+    initChat();
+    
     const timerInterval = setInterval(() => {
         if(!gameActive) { clearInterval(timerInterval); return; }
         salaryTimer--;
         if(salaryTimer <= 0) {
-            const salary = Math.floor(workPoints / 10); // 10 очков = 1 R$
+            const salary = Math.floor(workPoints / 10);
             if(salary > 0) {
                 db.ref('users/'+currentUser.uid).update({currency: userData.currency + salary});
-                alert(`ЗАРПЛАТА! Вы заработали ${salary} R$`);
+                alert(`ЗАРПЛАТА! +${salary} R$`);
                 workPoints = 0;
-            } else {
-                alert("Зарплата пришла, но вы не работали!");
-            }
+            } else alert("Нет работы - нет зарплаты!");
             salaryTimer = 600;
         }
         updateHUD();
@@ -128,18 +126,39 @@ function updateHUD() {
 function doJob(type) {
     workPoints += 10;
     document.getElementById('cashier-ui').style.display='none';
-    // Эффект всплывающего текста
-    const btn = document.createElement('div');
-    btn.innerText = "+10 Очков";
-    btn.style.cssText = "position:absolute; top:40%; left:50%; color:gold; font-size:24px; font-weight:bold; transform:translate(-50%,-50%); transition:1s;";
-    document.body.appendChild(btn);
-    setTimeout(() => { btn.style.top="30%"; btn.style.opacity="0"; }, 50);
-    setTimeout(() => btn.remove(), 1000);
+    showFloatText("+10 Очков");
     updateHUD();
 }
 function doSimpleJob() { doJob('work'); }
+function showFloatText(text) {
+    const btn = document.createElement('div');
+    btn.innerText = text;
+    btn.style.cssText = "position:absolute; top:40%; left:50%; color:gold; font-size:24px; font-weight:bold; transform:translate(-50%,-50%); transition:1s; pointer-events:none;";
+    document.body.appendChild(btn);
+    setTimeout(() => { btn.style.top="30%"; btn.style.opacity="0"; }, 50);
+    setTimeout(() => btn.remove(), 1000);
+}
 function closeUI(id) { document.getElementById(id).style.display='none'; }
 function exitGame() { location.reload(); }
+
+// --- ЧАТ (ЛОГИКА) ---
+function initChat() {
+    const msgBox = document.getElementById('chat-messages');
+    msgBox.innerHTML = '';
+    db.ref('games/pizza/chat').limitToLast(10).on('child_added', s => {
+        const d = s.val();
+        const div = document.createElement('div');
+        div.className = 'chat-msg';
+        div.innerHTML = `<span class="chat-name">${d.user}:</span> ${d.text}`;
+        msgBox.appendChild(div);
+        msgBox.scrollTop = msgBox.scrollHeight;
+    });
+}
+function sendChat() {
+    const i = document.getElementById('chat-input');
+    if(i.value.trim()) db.ref('games/pizza/chat').push({user:userData.username, text:i.value});
+    i.value='';
+}
 
 // --- 3D ДВИЖОК ---
 function init3D() {
@@ -149,76 +168,50 @@ function init3D() {
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = document.getElementById('opt-shadows').checked;
-    document.body.appendChild(renderer.domElement);
+    
+    const cont = document.body;
+    while(cont.querySelector('canvas')) cont.querySelector('canvas').remove();
+    cont.appendChild(renderer.domElement);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dl = new THREE.DirectionalLight(0xffffff, 0.7); dl.position.set(20,50,20); 
     if(renderer.shadowMap.enabled) dl.castShadow=true; scene.add(dl);
 
-    // Зоны взаимодействия
     const interactions = [];
 
-    // --- СТРОИТЕЛЬСТВО ПИЦЦЕРИИ ---
-    
-    // Трава (Улица)
+    // --- МИР ---
     const grass = new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.MeshStandardMaterial({color:0x33aa33}));
     grass.rotation.x = -Math.PI/2; scene.add(grass);
 
-    // Функция Стены (С Хитбоксом)
     function createBox(w, h, d, x, z, col=0xF5F5DC, isWall=true) {
-        const geo = new THREE.BoxGeometry(w, h, d);
-        const mat = new THREE.MeshStandardMaterial({color:col});
-        const mesh = new THREE.Mesh(geo, mat);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({color:col}));
         mesh.position.set(x, h/2, z);
         if(renderer.shadowMap.enabled) { mesh.castShadow=true; mesh.receiveShadow=true; }
         scene.add(mesh);
-        if(isWall) collidables.push(new THREE.Box3().setFromObject(mesh)); // Добавляем в коллизию
+        if(isWall) collidables.push(new THREE.Box3().setFromObject(mesh));
         return mesh;
     }
 
-    // Пол здания (Плитка)
+    // Пиццерия
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(60,60), new THREE.MeshStandardMaterial({color:0xCCCCCC}));
     floor.rotation.x = -Math.PI/2; floor.position.y=0.02; scene.add(floor);
 
-    // Внешние стены (Высота 8, Оставляем дырку для двери)
-    createBox(60, 8, 2, 0, -30); // Задняя
-    createBox(2, 8, 60, -30, 0); // Левая
-    createBox(2, 8, 60, 30, 0);  // Правая
-    createBox(25, 8, 2, -17.5, 30); // Передняя Левая
-    createBox(25, 8, 2, 17.5, 30);  // Передняя Правая
-    
-    // Внутренние стены (Разделение комнат)
-    // 1. Стена между Залом и Кухней
-    createBox(60, 8, 2, 0, 0, 0xEEDDCC);
-    // Проход на кухню (Дырка в стене - просто не ставим блок посередине)
-    
-    // 2. Стена Менеджера (Справа сзади)
-    createBox(2, 8, 20, 15, -20, 0xEEDDCC);
-    createBox(15, 8, 2, 22.5, -10, 0xEEDDCC);
+    createBox(60, 8, 2, 0, -30); // Зад
+    createBox(2, 8, 60, -30, 0); // Лево
+    createBox(2, 8, 60, 30, 0);  // Право
+    createBox(25, 8, 2, -17.5, 30); // Перед Л
+    createBox(25, 8, 2, 17.5, 30);  // Перед П
 
-    // --- МЕБЕЛЬ (ТОЖЕ ХИТБОКСЫ) ---
+    createBox(40, 2, 3, 0, 10, 0xFFFFFF); // Прилавок
     
-    // Прилавок (Спереди) - 2 Кассы
-    createBox(40, 2, 3, 0, 10, 0xFFFFFF); // Длинный прилавок
-    
-    // Касса 1
-    createBox(2, 1, 2, -10, 11.5, 0x333333, false);
     interactions.push({pos: new THREE.Vector3(-10,0,13), type:'cashier', radius:4});
-    // Касса 2
-    createBox(2, 1, 2, 10, 11.5, 0x333333, false);
     interactions.push({pos: new THREE.Vector3(10,0,13), type:'cashier', radius:4});
-
-    // Кухня (Печи)
-    createBox(10, 4, 4, -15, -28, 0x111111); // Печь 1
+    
+    createBox(10, 4, 4, -15, -28, 0x111111); // Печь
     interactions.push({pos: new THREE.Vector3(-15,0,-24), type:'cook', radius:5, label:"ГОТОВИТЬ"});
     
-    // Упаковка (Стол с коробками)
-    createBox(8, 2, 4, -25, -5, 0x8B4513); // Стол
-    createBox(2, 1, 2, -25, -2, 0xFFFFFF, false); // Коробка
+    createBox(8, 2, 4, -25, -5, 0x8B4513); // Стол упаковки
     interactions.push({pos: new THREE.Vector3(-22,0,-5), type:'box', radius:4, label:"УПАКОВАТЬ"});
-
-    // Стол менеджера
-    createBox(6, 2, 4, 25, -25, 0x552200); 
 
     // --- ПЕРСОНАЖ ---
     const player = new THREE.Group();
@@ -227,55 +220,34 @@ function init3D() {
     const pantsMat = new THREE.MeshStandardMaterial({color: 0x228B22});
 
     if (isRoundSkin) {
-        // Округлый скин (R15 style)
+        // R15
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.7), skinMat); head.position.y=3.8;
         const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2), bodyMat); torso.position.y=2.2;
-        
-        // Плечи и руки
         const armGeo = new THREE.CapsuleGeometry(0.35, 1.5);
         const lArm = new THREE.Mesh(armGeo, skinMat); lArm.position.set(-1.4, 3, 0);
         const rArm = new THREE.Mesh(armGeo, skinMat); rArm.position.set(1.4, 3, 0);
-        
-        // Ноги
         const legGeo = new THREE.CapsuleGeometry(0.4, 1.8);
         const lLeg = new THREE.Mesh(legGeo, pantsMat); lLeg.position.set(-0.5, 0.9, 0);
         const rLeg = new THREE.Mesh(legGeo, pantsMat); rLeg.position.set(0.5, 0.9, 0);
-
         player.add(head, torso, lArm, rArm, lLeg, rLeg);
         player.userData = { la:lArm, ra:rArm, ll:lLeg, rl:rLeg, type:'round' };
     } else {
-        // Квадратный скин (R6 style)
+        // R6
         const head = new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2), skinMat); head.position.y=4.6;
         const torso = new THREE.Mesh(new THREE.BoxGeometry(2,2,1), bodyMat); torso.position.y=3;
-        
         const armGeo = new THREE.BoxGeometry(1,2,1);
         const lArm = new THREE.Mesh(armGeo, skinMat); lArm.position.set(-1.5,3,0);
         const rArm = new THREE.Mesh(armGeo, skinMat); rArm.position.set(1.5,3,0);
-        
         const legGeo = new THREE.BoxGeometry(1,2,1);
         const lLeg = new THREE.Mesh(legGeo, pantsMat); lLeg.position.set(-0.5,1,0);
         const rLeg = new THREE.Mesh(legGeo, pantsMat); rLeg.position.set(0.5,1,0);
-
         player.add(head, torso, lArm, rArm, lLeg, rLeg);
         player.userData = { la:lArm, ra:rArm, ll:lLeg, rl:rLeg, type:'box' };
     }
 
-    scene.add(player); camera.position.set(0,8,20); // Начало на улице перед входом
-
-    // --- NPC (ПОСЕТИТЕЛИ) ---
-    const npcs = [];
-    function createNPC() {
-        const npc = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({color: Math.random()*0xffffff});
-        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,2), mat); b.position.y=1;
-        const h = new THREE.Mesh(new THREE.SphereGeometry(0.4), new THREE.MeshStandardMaterial({color:0xffd700})); h.position.y=2.2;
-        npc.add(b,h);
-        npc.position.set((Math.random()-0.5)*10, 0, 40); // Спавн на улице
-        scene.add(npc);
-        npcs.push({mesh:npc, target: new THREE.Vector3((Math.random()-0.5)*10, 0, 14), state:'walking'}); // Идут к кассам
-    }
-    // Создаем 3 NPC
-    createNPC(); createNPC(); createNPC();
+    // ВАЖНО: СПАВН НА УЛИЦЕ (ЧТОБЫ НЕ ЗАСТРЯТЬ)
+    player.position.set(0, 2, 45); 
+    scene.add(player); camera.position.set(0,8,55);
 
     // --- УПРАВЛЕНИЕ ---
     let moveFwd=0, moveTurn=0, vy=0;
@@ -288,34 +260,26 @@ function init3D() {
     joystickManager.on('end', () => {moveFwd=0; moveTurn=0;});
     document.getElementById('btnJump').addEventListener('touchstart', e=>{e.preventDefault(); if(player.position.y<=0.1) vy=0.3;});
 
-    // ФИЗИКА КОЛЛИЗИЙ (СТЕНЫ)
     function resolveCollision(newPos) {
         const playerBox = new THREE.Box3().setFromCenterAndSize(newPos, new THREE.Vector3(1, 2, 1));
         for(let wallBox of collidables) {
-            if(playerBox.intersectsBox(wallBox)) {
-                return true; // Столкновение!
-            }
+            if(playerBox.intersectsBox(wallBox)) return true;
         }
-        return false; // Путь свободен
+        return false;
     }
 
     function animate() {
         if(!gameActive) return;
         requestAnimationFrame(animate);
 
-        // Расчет движения
         if(moveFwd!==0) {
-            // Пробуем шагнуть вперед
             const nextPos = player.position.clone();
             nextPos.z += Math.cos(player.rotation.y) * moveFwd;
             nextPos.x += Math.sin(player.rotation.y) * moveFwd;
 
-            if(!resolveCollision(nextPos)) {
-                player.position.copy(nextPos);
-            }
+            if(!resolveCollision(nextPos)) player.position.copy(nextPos);
             player.rotation.y -= moveTurn;
             
-            // Анимация
             const t = Date.now()*0.015;
             if(player.userData.type === 'round') {
                 player.userData.ll.rotation.x = Math.sin(t)*0.5;
@@ -326,30 +290,11 @@ function init3D() {
             }
         }
 
-        // Гравитация
         if(player.position.y>0 || vy>0) { player.position.y+=vy; vy-=0.015; }
         else { player.position.y=0; vy=0; }
 
-        // Логика NPC
-        npcs.forEach(bot => {
-            if(bot.state === 'walking') {
-                const dir = new THREE.Vector3().subVectors(bot.target, bot.mesh.position).normalize();
-                bot.mesh.position.add(dir.multiplyScalar(0.03));
-                if(bot.mesh.position.distanceTo(bot.target) < 1) {
-                    bot.state = 'waiting';
-                    setTimeout(() => {
-                        bot.target.set((Math.random()-0.5)*40, 0, 40 + Math.random()*10); // Уходят
-                        bot.state = 'walking';
-                    }, 5000);
-                }
-            }
-        });
-
-        // Проверка Работы (Зоны)
         let activeUI = null;
-        interactions.forEach(zone => {
-            if(player.position.distanceTo(zone.pos) < zone.radius) activeUI = zone;
-        });
+        interactions.forEach(zone => { if(player.position.distanceTo(zone.pos) < zone.radius) activeUI = zone; });
 
         if (activeUI) {
             if(activeUI.type==='cashier') document.getElementById('cashier-ui').style.display = 'block';
@@ -364,7 +309,6 @@ function init3D() {
             document.getElementById('action-btn').style.display='none';
         }
 
-        // Камера
         const o = new THREE.Vector3(0,7,-10).applyMatrix4(player.matrixWorld);
         camera.position.lerp(o, 0.1);
         camera.lookAt(player.position.x, player.position.y+3, player.position.z);
