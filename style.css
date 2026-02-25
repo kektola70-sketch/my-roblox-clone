@@ -1,82 +1,51 @@
 body {
-    margin: 0;
-    background-color: #1e1e1e; /* Темная тема как в Роблокс */
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: white;
-    overflow: hidden;
+    margin: 0; background-color: #121212; color: white;
+    font-family: 'Segoe UI', sans-serif;
+}
+nav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 20px; background: #232527; border-bottom: 1px solid #333;
+}
+.logo { font-size: 24px; font-weight: bold; color: white; }
+.nav-links a { color: #ccc; text-decoration: none; margin: 0 15px; font-weight: 500; }
+.nav-links a.active { color: white; border-bottom: 2px solid white; padding-bottom: 5px; }
+
+.btn-primary { background: white; color: black; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.btn-logout { background: transparent; border: 1px solid #555; color: white; padding: 5px 10px; border-radius: 4px; }
+button { cursor: pointer; }
+
+.hero {
+    background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1000');
+    background-size: cover; padding: 60px 20px; text-align: center;
 }
 
-/* Экран входа */
-#auth-screen {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: linear-gradient(135deg, #2b5876, #4e4376);
-    display: flex; justify-content: center; align-items: center; z-index: 2000;
-}
-.auth-box {
-    background: #2d2d2d; padding: 25px; border-radius: 12px;
-    text-align: center; width: 85%; max-width: 320px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
-input {
-    width: 90%; padding: 12px; margin: 8px 0;
-    border: none; border-radius: 6px; background: #3d3d3d; color: white;
-}
-.buttons button {
-    width: 48%; padding: 12px; margin-top: 10px;
-    border: none; border-radius: 6px; color: white; background: #007bff; font-weight: bold;
-}
+.container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+h2 { font-size: 22px; margin-bottom: 20px; }
 
-/* ГЛАВНОЕ МЕНЮ */
-#dashboard {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: #121212; overflow-y: auto; z-index: 1000;
-}
-.profile-header {
-    background: #232527; padding: 20px;
-    display: flex; align-items: center; gap: 15px;
-    border-bottom: 1px solid #333;
-}
-.avatar-circle {
-    width: 60px; height: 60px; border-radius: 50%;
-    background: #ff9900; display: flex; justify-content: center; align-items: center;
-    font-size: 24px; font-weight: bold; color: white; border: 2px solid #fff;
-}
-.user-info h2 { margin: 0; font-size: 20px; }
-.connections { color: #888; font-size: 14px; margin: 5px 0 0 0; }
-
-.games-section { padding: 20px; }
 .games-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 15px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px;
 }
-/* Карточка игры */
+
 .game-card {
-    background: #2a2a2a; border-radius: 10px; overflow: hidden;
-    transition: transform 0.2s; cursor: pointer;
+    background: #2a2a2a; border-radius: 8px; overflow: hidden; transition: 0.3s;
+    cursor: pointer; position: relative;
 }
-.game-card:active { transform: scale(0.95); }
-.game-img {
-    width: 100%; height: 100px; background: #555;
-    display: flex; justify-content: center; align-items: center; font-size: 30px;
+.game-card:hover { transform: translateY(-5px); }
+.game-thumb { width: 100%; height: 120px; background: #444; display: flex; align-items: center; justify-content: center; font-size: 40px; }
+.game-info { padding: 10px; }
+.game-title { font-weight: bold; font-size: 16px; margin-bottom: 5px; }
+.game-stats { font-size: 12px; color: #aaa; }
+.play-btn {
+    display: block; width: 100%; background: #00b06f; color: white; text-align: center;
+    padding: 8px 0; margin-top: 10px; text-decoration: none; border-radius: 4px; font-weight: bold;
 }
-.game-title { padding: 10px; font-weight: bold; font-size: 14px; text-align: center; }
 
-/* Интерфейс игры */
-#game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-#controls {
-    position: absolute; bottom: 30px; left: 20px; right: 20px;
-    display: flex; justify-content: space-between;
-}
-.btn {
-    width: 70px; height: 70px; border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255,255,255,0.5);
-    pointer-events: auto;
-}
-#btnMove { background: rgba(0, 100, 255, 0.2); }
-#btnJump { background: rgba(255, 50, 50, 0.2); }
-
-#btn-exit {
-    position: absolute; top: 10px; left: 10px; pointer-events: auto;
-    background: #333; color: white; border: none; padding: 5px 10px; border-radius: 5px;
-}
+/* Модальное окно */
+.modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); }
+.modal-content { background-color: #2d2d2d; margin: 15% auto; padding: 20px; border-radius: 10px; width: 300px; text-align: center; }
+.close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+input { width: 90%; padding: 10px; margin: 5px 0; background: #3d3d3d; border: 1px solid #555; color: white; border-radius: 5px; }
+#auth-action-btn { width: 100%; padding: 10px; background: white; border: none; font-weight: bold; margin-top: 10px; }
+.switch-auth { color: #00aaff; cursor: pointer; font-size: 13px; margin-top: 10px; }
+.user-profile { display: flex; align-items: center; gap: 10px; }
+.avatar-mini { width: 30px; height: 30px; border-radius: 50%; background: orange; text-align: center; line-height: 30px; font-weight: bold; }
