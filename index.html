@@ -3,80 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pizza Work</title>
+    <title>Rublox Mobile</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 
-    <!-- ВХОД -->
+    <!-- ЗАСТАВКА / ВХОД -->
     <div id="auth-screen">
         <div class="auth-box">
-            <h1>🍕 Pizza Work</h1>
-            <div id="loading-text">Connecting...</div>
+            <h1>Rublox</h1> <!-- Вернули название -->
+            <div id="loading-text">Загрузка данных...</div>
             <div id="auth-forms" style="display:none;">
-                <input type="email" id="email" placeholder="Email">
+                <input type="email" id="email" placeholder="Электронная почта">
                 <input type="password" id="password" placeholder="Пароль">
                 <input type="text" id="username" placeholder="Никнейм">
                 <button onclick="login()" class="btn-primary">Войти</button>
-                <button onclick="register()" class="btn-sec">Создать аккаунт</button>
+                <button onclick="register()" class="btn-sec">Регистрация</button>
             </div>
         </div>
     </div>
 
-    <!-- МЕНЮ -->
+    <!-- ГЛАВНОЕ МЕНЮ -->
     <div id="dashboard" style="display: none;">
+        <!-- Верхняя панель -->
         <div class="top-bar">
-            <div class="user-info">
+            <div class="user-profile-mini">
                 <div class="avatar" id="dash-avatar">?</div>
                 <div>
-                    <div id="dash-username">Guest</div>
-                    <div class="currency"><span id="dash-money">0</span> R$</div>
+                    <div id="dash-username">Гость</div>
+                    <div class="currency"><i class="fas fa-coins"></i> <span id="dash-money">0</span> R$</div>
                 </div>
             </div>
-            <button onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
+            <div class="top-icons">
+                <button onclick="openSettings()"><i class="fas fa-cog"></i></button>
+                <button onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
         </div>
-        
-        <div class="menu-content">
+
+        <!-- Вкладки -->
+        <div class="nav-tabs">
+            <button class="tab-btn active" onclick="switchTab('games')">Игры</button>
+            <button class="tab-btn" onclick="switchTab('shop')">Магазин</button>
+        </div>
+
+        <!-- ИГРЫ -->
+        <div id="tab-games" class="tab-content">
             <div class="game-card-big" onclick="startGame()">
                 <div class="icon">🍕</div>
-                <h2>Work at a Pizza Place</h2>
-                <p>Cashier • Cook • Boxer • Delivery</p>
-                <button class="play-btn">PLAY NOW</button>
+                <h2>Работа в Пиццерии</h2>
+                <p>Кассир • Повар • Упаковщик • Менеджер</p>
+                <button class="play-btn">ИГРАТЬ</button>
             </div>
-            
-            <div class="shop-section">
-                <h3>Avatar Shop</h3>
-                <div id="shop-list" class="shop-grid"></div>
-            </div>
+        </div>
+
+        <!-- МАГАЗИН -->
+        <div id="tab-shop" class="tab-content" style="display:none;">
+            <h3>Цвет Кожи</h3>
+            <div id="shop-list" class="shop-grid"></div>
         </div>
     </div>
 
-    <!-- ИГРА -->
-    <div id="game-ui" style="display: none;">
-        <!-- HUD Сверху -->
-        <div class="game-hud">
-            <div class="hud-item">💰 Paycheck: <span id="game-score">0</span> pts</div>
-            <div class="hud-item">⏰ Next Pay: <span id="pay-timer">20:00</span></div>
-            <button onclick="exitGame()" class="btn-exit">EXIT</button>
-        </div>
-
-        <!-- ИНТЕРФЕЙС КАССИРА (Появляется у кассы) -->
-        <div id="cashier-ui" style="display:none;">
-            <h3>Take Order</h3>
-            <div class="cashier-grid">
-                <button onclick="doJob('pepperoni')">🍕 Pepperoni</button>
-                <button onclick="doJob('cheese')">🧀 4 Cheese</button>
-                <button onclick="doJob('sausage')">🌭 Sausage</button>
-                <button onclick="doJob('soda')">🥤 Soda</button>
+    <!-- ОКНО НАСТРОЕК -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2>Настройки</h2>
+            <div class="setting-item">
+                <span>Тени (Графика)</span> <input type="checkbox" checked id="opt-shadows">
             </div>
-            <button onclick="closeUI('cashier-ui')" class="btn-close">Close</button>
+            <div class="setting-item">
+                <span>Округлый скин (R15)</span> <input type="checkbox" id="opt-round-skin">
+            </div>
+            <button onclick="closeSettings()" class="btn-primary">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ИГРОВОЙ ИНТЕРФЕЙС -->
+    <div id="game-ui" style="display: none;">
+        <!-- HUD -->
+        <div class="game-hud">
+            <div class="hud-item">💰 Зарплата: <span id="game-score">0</span></div>
+            <div class="hud-item">⏰ Выплата: <span id="pay-timer">10:00</span></div>
+            <button onclick="exitGame()" class="btn-exit">МЕНЮ</button>
         </div>
 
-        <!-- КНОПКА ДЕЙСТВИЯ (Для повара/упаковщика) -->
-        <button id="action-btn" style="display:none;" onclick="doSimpleJob()">INTERACT</button>
+        <!-- ИНТЕРФЕЙС КАССЫ -->
+        <div id="cashier-ui" style="display:none;">
+            <h3>Заказ Клиента</h3>
+            <div class="cashier-grid">
+                <button onclick="doJob('pepperoni')">🍕 Пепперони</button>
+                <button onclick="doJob('cheese')">🧀 4 Сыра</button>
+                <button onclick="doJob('sausage')">🌭 Сосиски</button>
+                <button onclick="doJob('soda')">🥤 Газировка</button>
+            </div>
+            <button onclick="closeUI('cashier-ui')" class="btn-close">Закрыть</button>
+        </div>
 
-        <!-- УПРАВЛЕНИЕ -->
+        <!-- КНОПКА ДЕЙСТВИЯ -->
+        <button id="action-btn" style="display:none;" onclick="doSimpleJob()">E</button>
+
         <div id="joystick-zone"></div>
         <div id="btnJump">⬆️</div>
     </div>
