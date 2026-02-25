@@ -1,84 +1,82 @@
 body {
     margin: 0;
+    background-color: #1e1e1e; /* Темная тема как в Роблокс */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
     overflow: hidden;
-    background-color: #222;
-    font-family: Arial, sans-serif;
 }
 
 /* Экран входа */
 #auth-screen {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, #2b5876, #4e4376);
+    display: flex; justify-content: center; align-items: center; z-index: 2000;
 }
-
 .auth-box {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-    width: 300px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    background: #2d2d2d; padding: 25px; border-radius: 12px;
+    text-align: center; width: 85%; max-width: 320px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
-
 input {
-    width: 90%;
-    padding: 10px;
-    margin: 5px 0;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+    width: 90%; padding: 12px; margin: 8px 0;
+    border: none; border-radius: 6px; background: #3d3d3d; color: white;
+}
+.buttons button {
+    width: 48%; padding: 12px; margin-top: 10px;
+    border: none; border-radius: 6px; color: white; background: #007bff; font-weight: bold;
 }
 
-button {
-    width: 45%;
-    padding: 10px;
-    margin-top: 10px;
-    border: none;
-    background: #0088FF;
-    color: white;
-    border-radius: 5px;
-    cursor: pointer;
+/* ГЛАВНОЕ МЕНЮ */
+#dashboard {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: #121212; overflow-y: auto; z-index: 1000;
 }
-
-#game-ui {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
+.profile-header {
+    background: #232527; padding: 20px;
+    display: flex; align-items: center; gap: 15px;
+    border-bottom: 1px solid #333;
 }
+.avatar-circle {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: #ff9900; display: flex; justify-content: center; align-items: center;
+    font-size: 24px; font-weight: bold; color: white; border: 2px solid #fff;
+}
+.user-info h2 { margin: 0; font-size: 20px; }
+.connections { color: #888; font-size: 14px; margin: 5px 0 0 0; }
 
+.games-section { padding: 20px; }
+.games-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+}
+/* Карточка игры */
+.game-card {
+    background: #2a2a2a; border-radius: 10px; overflow: hidden;
+    transition: transform 0.2s; cursor: pointer;
+}
+.game-card:active { transform: scale(0.95); }
+.game-img {
+    width: 100%; height: 100px; background: #555;
+    display: flex; justify-content: center; align-items: center; font-size: 30px;
+}
+.game-title { padding: 10px; font-weight: bold; font-size: 14px; text-align: center; }
+
+/* Интерфейс игры */
+#game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 #controls {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    right: 20px;
-    display: flex;
-    justify-content: space-between;
+    position: absolute; bottom: 30px; left: 20px; right: 20px;
+    display: flex; justify-content: space-between;
 }
-
 .btn {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: 2px solid #fff;
+    width: 70px; height: 70px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255,255,255,0.5);
     pointer-events: auto;
 }
+#btnMove { background: rgba(0, 100, 255, 0.2); }
+#btnJump { background: rgba(255, 50, 50, 0.2); }
 
-#player-name {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: white;
-    font-weight: bold;
-    font-size: 20px;
-    text-shadow: 1px 1px 2px black;
+#btn-exit {
+    position: absolute; top: 10px; left: 10px; pointer-events: auto;
+    background: #333; color: white; border: none; padding: 5px 10px; border-radius: 5px;
 }
