@@ -148,16 +148,26 @@ if (gamesGrid) {
 }
 
 // --- ЛОГИКА ЗАПУСКА ПРИЛОЖЕНИЯ (DEEP LINKING) ---
+// --- ИСПРАВЛЕННАЯ ЛОГИКА ЗАПУСКА (WEB VERSION) ---
 function launchGame(gameId, gameTitle) {
     const user = auth.currentUser;
     
+    // 1. Проверка входа
     if (!user) {
-        alert("Please Log In to play!");
+        alert("Сначала войдите в аккаунт!");
         openModal('login');
         return;
     }
 
-    console.log(`Attempting to launch: ${gameTitle} (ID: ${gameId})`);
+    console.log(`Запуск игры: ${gameTitle}`);
+    
+    // 2. Вместо 'pocketblox://' мы просто открываем файл с игрой
+    // Мы передаем ID игры в адресе, чтобы игра знала, что грузить
+    const gameUrl = `game.html?id=${gameId}&user=${user.uid}`;
+    
+    // Переходим на страницу игры
+    window.location.href = gameUrl;
+}
     
     // 1. Попытка открыть установленное APK приложение
     // Ссылка формата: pocketblox://play?gameId=...&user=...
