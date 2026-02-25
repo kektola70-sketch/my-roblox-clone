@@ -3,41 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>My Roblox Clone</title>
+    <title>Pocket Blox</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            display: flex;
-            justify-content: space-between;
-            pointer-events: none; /* Чтобы клики проходили сквозь пустоту */
-        }
-        .btn {
-            width: 80px;
-            height: 80px;
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 50%;
-            border: 2px solid #fff;
-            pointer-events: auto;
-            touch-action: manipulation;
-        }
-    </style>
 </head>
 <body>
-    <!-- Интерфейс управления -->
-    <div id="controls">
-        <div class="btn" id="btnMove" style="background: rgba(0,0,255,0.3);"></div>
-        <div class="btn" id="btnJump" style="background: rgba(255,0,0,0.3);"></div>
+
+    <!-- ЭКРАН ВХОДА / РЕГИСТРАЦИИ -->
+    <div id="auth-screen">
+        <div class="auth-box">
+            <h1>Pocket Blox</h1>
+            <input type="email" id="email" placeholder="Email (Почта)">
+            <input type="password" id="password" placeholder="Пароль">
+            <input type="text" id="username" placeholder="Никнейм (для новых)">
+            
+            <div class="buttons">
+                <button onclick="register()">Создать аккаунт</button>
+                <button onclick="login()" style="background:#44aa44;">Войти</button>
+            </div>
+            <p id="status-msg">Введите данные...</p>
+        </div>
     </div>
 
-    <!-- Подключаем Three.js через интернет -->
+    <!-- ИНТЕРФЕЙС ИГРЫ (Скрыт в начале) -->
+    <div id="game-ui" style="display: none;">
+        <div id="controls">
+            <div class="btn" id="btnMove" style="background: rgba(0,0,255,0.3);"></div>
+            <div class="btn" id="btnJump" style="background: rgba(255,0,0,0.3);"></div>
+        </div>
+        <div id="player-name">Гость</div>
+    </div>
+
+    <!-- Библиотеки -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Наш скрипт игры -->
+    
+    <!-- Firebase (Серверная часть) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <!-- Наш код -->
     <script src="game.js"></script>
 </body>
 </html>
