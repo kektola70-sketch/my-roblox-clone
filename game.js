@@ -1,4 +1,4 @@
-// 1. КОНФИГУРАЦИЯ (ТВОИ КЛЮЧИ)
+// 1. КОНФИГУРАЦИЯ FIREBASE (ВСТАВЬ СВОИ ДАННЫЕ!)
 const firebaseConfig = {
   apiKey: "AIzaSyB_1fSgljQJV73dVAt1H-Atvr4j1MGJDiA",
   authDomain: "pocketblox-e1290.firebaseapp.com",
@@ -15,61 +15,101 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 
-// --- ЛОГИКА ВХОДА ---
-const statusText = document.getElementById('status-text');
-const loginForms = document.getElementById('login-forms');
-const authScreen = document.getElementById('auth-screen');
-const gameUI = document.getElementById('game-ui');
+// Глобальные переменные
+let currentUser = null;
+let joystickManager = null; // Для управления джойстиком
 
-// Проверка: вошел ли уже игрок?
+// --- ЧАСТЬ 1: АВТОРИЗАЦИЯ ---
 auth.onAuthStateChanged(user => {
     if (user) {
-        statusText.innerText = "Вход выполнен! Запуск...";
-        // Получаем имя и запускаем игру
+        currentUser = user;
+        document.getElementById('loading').style.display = 'none';
+        
         db.ref('users/' + user.uid).once('value').then(snap => {
             const name = snap.val()?.username || "Player";
-            startGame(name);
+            openDashboard(name);
         });
     } else {
-        statusText.innerText = "Пожалуйста, войдите";
-        loginForms.style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('auth-forms').style.display = 'block';
     }
 });
 
 function login() {
     const email = document.getElementById('email').value;
     const pass = document.getElementById('password').value;
-    statusText.innerText = "Проверка...";
-    auth.signInWithEmailAndPassword(email, pass).catch(e => alert("Ошибка: " + e.message));
+    auth.signInWithEmailAndPassword(email, pass).catch(e => alert(e.message));
 }
 
 function register() {
     const email = document.getElementById('email').value;
     const pass = document.getElementById('password').value;
     const name = document.getElementById('username').value;
-    if(!name) return alert("Введите никнейм!");
+    if(!name) return alert("Введите имя!");
     
-    statusText.innerText = "Создание...";
-    auth.createUserWithEmailAndPassword(email, pass)
-        .then(cred => {
-            db.ref('users/' + cred.user.uid).set({ username: name, email: email });
-        })
-        .catch(e => alert("Ошибка: " + e.message));
+    auth.createUserWithEmailAndPassword(email, pass).then(cred => {
+        db.ref('users/' + cred.user.uid).set({ username: name, email: email, score: 0 });
+    }).catch(e => alert(e.message));
 }
 
-function logout() {
-    auth.signOut();
-    location.reload();
+function logout() { auth.signOut(); location.reload(); }
+
+
+// --- ЧАСТЬ 2: МЕНЮ (DASHBOARD) ---
+function openDashboard(username) {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('game-ui').style.display = 'none';
+
+    // Заполняем профиль
+    document.getElementById('dash-username').innerText = username;
+    document.getElementById('dash-avatar').innerText = username[0];
+
+    // Генерируем Лидерборд (Фейковый + Настоящий игрок)
+    const lbList = document.getElementById('leaderboard');
+    lbList.innerHTML = `
+        <div class="lb-item"><span class="lb-rank">#1</span><span>Admin_God</span><span>9999 pts</span></div>
+        <div class="lb-item"><span class="lb-rank">#2</span><span>ProGamer</span><span>5400 pts</span></div>
+        <div class="lb-item"><span class="lb-rank">#3</span><span>NoobKiller</span><span>3200 pts</span></div>
+        <div class="lb-item" style="background:#333"><span class="lb-rank">#You</span><span>${username}</span><span>0 pts</span></div>
+    `;
+
+    // Генерируем Игры
+    const games = [
+        { id: "city", title: "Blox City RP", icon: "🏙️", color: "#44aa44" },
+        { id: "parkour", title: "Mega Parkour", icon: "🏃", color: "#aa4444" },
+        { id: "space", title: "Space Wars", icon: "🚀", color: "#4444aa" }
+    ];
+    
+    const gList = document.getElementById('games-list');
+    gList.innerHTML = '';
+    games.forEach(g => {
+        gList.innerHTML += `
+            <div class="game-card" onclick="startGame('${g.color}')">
+                <div class="game-icon" style="background:${g.color}">${g.icon}</div>
+                <div class="game-details">
+                    <h4>${g.title}</h4>
+                    <p>Tap to play</p>
+                </div>
+                <button class="play-small">PLAY</button>
+            </div>
+        `;
+    });
 }
 
-// --- ЛОГИКА ИГРЫ (THREE.JS) ---
-function startGame(playerName) {
-    // Скрываем меню, показываем игру
-    authScreen.style.display = 'none';
-    gameUI.style.display = 'block';
-    document.getElementById('ui-username').innerText = playerName;
+function exitGame() {
+    // Удаляем джойстик при выходе
+    if(joystickManager) { joystickManager.destroy(); joystickManager = null; }
+    // Перезагружаем страницу для возврата в меню (самый простой способ очистить Three.js)
+    location.reload(); 
+}
 
-    // Сцена
+// --- ЧАСТЬ 3: ИГРА (THREE.JS + ДЖОЙСТИК) ---
+function startGame(worldColor) {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('game-ui').style.display = 'block';
+
+    // 1. Инициализация Three.js
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
     scene.fog = new THREE.Fog(0x87CEEB, 10, 60);
@@ -78,6 +118,10 @@ function startGame(playerName) {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    
+    // Удаляем старый канвас если есть
+    const oldCanvas = document.querySelector('canvas');
+    if(oldCanvas) oldCanvas.remove();
     document.body.appendChild(renderer.domElement);
 
     // Свет
@@ -87,87 +131,75 @@ function startGame(playerName) {
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    // Мир (Пол)
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x44aa44 }));
+    // Пол
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: worldColor }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Декорации (Рандомные блоки)
+    // Блоки
     for(let i=0; i<15; i++) {
-        const h = 2 + Math.random()*5;
-        const geo = new THREE.BoxGeometry(3, h, 3);
-        const mat = new THREE.MeshStandardMaterial({ color: Math.random()*0xffffff });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set((Math.random()-0.5)*60, h/2, (Math.random()-0.5)*60);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(4,4,4), new THREE.MeshStandardMaterial({color: Math.random()*0xffffff}));
+        mesh.position.set((Math.random()-0.5)*60, 2, (Math.random()-0.5)*60);
         mesh.castShadow = true;
         scene.add(mesh);
     }
 
-    // --- ПЕРСОНАЖ ---
-    function createChar(color) {
-        const group = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({color: color});
-        
-        // Тело
-        const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 1), mat);
-        body.position.y = 2;
-        
-        // Голова
-        const head = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({color: 0xffd700}));
-        head.position.y = 3.6;
-        
-        // Ноги (для анимации)
-        const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2, 0.7), new THREE.MeshStandardMaterial({color: 0x222222}));
-        lLeg.position.y = -1;
-        const lLegG = new THREE.Group(); lLegG.add(lLeg); lLegG.position.set(-0.4, 1, 0);
-
-        const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2, 0.7), new THREE.MeshStandardMaterial({color: 0x222222}));
-        rLeg.position.y = -1;
-        const rLegG = new THREE.Group(); rLegG.add(rLeg); rLegG.position.set(0.4, 1, 0);
-
-        group.add(body, head, lLegG, rLegG);
-        group.userData = { lLeg: lLegG, rLeg: rLegG };
-        return group;
-    }
-
-    const player = createChar(0x0088ff);
+    // Игрок
+    const player = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 1), new THREE.MeshStandardMaterial({color: 0x0088ff}));
+    body.position.y = 2;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({color: 0xffd700}));
+    head.position.y = 3.6;
+    player.add(body, head);
     scene.add(player);
-    camera.position.set(0, 5, -8);
 
-    // --- БОТЫ ---
-    const bots = [];
-    for(let i=0; i<8; i++) {
-        const b = createChar(Math.random()*0xffffff);
-        b.position.set((Math.random()-0.5)*40, 0, (Math.random()-0.5)*40);
-        scene.add(b);
-        bots.push({ mesh: b, speed: 0.05 + Math.random()*0.05, rot: Math.random()*100 });
-    }
+    camera.position.set(0, 7, -10);
 
-    // --- УПРАВЛЕНИЕ ---
-    let moving = false;
-    let walkAnim = 0;
-    const btnMove = document.getElementById('btnMove');
-    const btnJump = document.getElementById('btnJump');
+    // --- НАСТРОЙКА ДЖОЙСТИКА (NIPPLE.JS) ---
+    const joyZone = document.getElementById('joystick-zone');
+    joystickManager = nipplejs.create({
+        zone: joyZone,
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'white',
+        size: 100
+    });
 
-    btnMove.addEventListener('touchstart', (e)=>{ e.preventDefault(); moving=true; });
-    btnMove.addEventListener('touchend', (e)=>{ e.preventDefault(); moving=false; });
-    btnMove.addEventListener('mousedown', ()=>{ moving=true; });
-    btnMove.addEventListener('mouseup', ()=>{ moving=false; });
+    let moveData = { forward: 0, turn: 0 };
 
+    joystickManager.on('move', (evt, data) => {
+        // Конвертируем данные джойстика
+        // data.force - сила нажатия (скорость)
+        // data.angle.radian - угол поворота
+        
+        const force = Math.min(data.force, 2); // Ограничим скорость
+        const angle = data.angle.radian;
+
+        // Вычисляем движение (простая математика)
+        // В Three.js Z - это вперед/назад, X - влево/вправо
+        moveData.forward = Math.sin(angle) * force * 0.1;
+        moveData.turn = Math.cos(angle) * 0.05; 
+    });
+
+    joystickManager.on('end', () => {
+        moveData.forward = 0;
+        moveData.turn = 0;
+    });
+
+    // Прыжок
     let vy = 0;
-    btnJump.addEventListener('touchstart', (e)=>{ 
-        e.preventDefault(); if(player.position.y<=0.1) vy=0.3; 
-    });
-    btnJump.addEventListener('mousedown', ()=>{ 
-        if(player.position.y<=0.1) vy=0.3; 
+    const btnJump = document.getElementById('btnJump');
+    btnJump.addEventListener('touchstart', (e) => {
+        e.preventDefault(); if(player.position.y <= 0.1) vy = 0.3;
     });
 
-    // --- ЦИКЛ ---
+    // Анимация
     function animate() {
+        if(!document.getElementById('game-ui').style.display === 'none') return; // Остановить если вышли
         requestAnimationFrame(animate);
 
-        // Игрок
+        // Физика
         if(player.position.y > 0 || vy > 0) {
             player.position.y += vy;
             vy -= 0.015;
@@ -176,34 +208,21 @@ function startGame(playerName) {
             vy = 0;
         }
 
-        if(moving) {
-            player.translateZ(0.15);
-            walkAnim += 0.2;
-            player.userData.lLeg.rotation.x = Math.sin(walkAnim);
-            player.userData.rLeg.rotation.x = -Math.sin(walkAnim);
-        } else {
-            player.userData.lLeg.rotation.x = 0;
-            player.userData.rLeg.rotation.x = 0;
+        // Управление Джойстиком
+        if(moveData.forward !== 0) {
+            player.translateZ(moveData.forward); // Движение вперед по направлению взгляда
+            player.rotation.y -= moveData.turn;  // Поворот
         }
 
-        // Камера
-        const camOff = new THREE.Vector3(0, 5, -8).applyMatrix4(player.matrixWorld);
-        camera.position.lerp(camOff, 0.1);
-        camera.lookAt(player.position.x, player.position.y+2, player.position.z);
-
-        // Боты
-        bots.forEach(bot => {
-            bot.mesh.translateZ(bot.speed);
-            bot.mesh.userData.lLeg.rotation.x = Math.sin(Date.now()*0.01);
-            bot.mesh.userData.rLeg.rotation.x = -Math.sin(Date.now()*0.01);
-            
-            if(Math.random() < 0.01) bot.mesh.rotation.y += Math.random();
-            if(bot.mesh.position.length() > 40) bot.mesh.lookAt(0,0,0);
-        });
+        // Камера следует за игроком
+        const camOffset = new THREE.Vector3(0, 6, -10).applyMatrix4(player.matrixWorld);
+        camera.position.lerp(camOffset, 0.1);
+        camera.lookAt(player.position.x, player.position.y + 2, player.position.z);
 
         renderer.render(scene, camera);
     }
     
+    // Ресайз
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth/window.innerHeight;
         camera.updateProjectionMatrix();
