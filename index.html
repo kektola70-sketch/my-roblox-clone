@@ -5,43 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Pocket Blox</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome для иконок (друзья, настройки) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 
-    <!-- ЭКРАН ВХОДА / РЕГИСТРАЦИИ -->
+    <!-- 1. ЭКРАН ВХОДА -->
     <div id="auth-screen">
         <div class="auth-box">
             <h1>Pocket Blox</h1>
             <input type="email" id="email" placeholder="Email (Почта)">
-            <input type="password" id="password" placeholder="Пароль">
-            <input type="text" id="username" placeholder="Никнейм (для новых)">
+            <input type="password" id="password" placeholder="Пароль (6+ символов)">
+            <input type="text" id="username" placeholder="Никнейм">
             
             <div class="buttons">
-                <button onclick="register()">Создать аккаунт</button>
+                <button onclick="register()">Создать</button>
                 <button onclick="login()" style="background:#44aa44;">Войти</button>
             </div>
-            <p id="status-msg">Введите данные...</p>
+            <p id="status-msg">Добро пожаловать!</p>
         </div>
     </div>
 
-    <!-- ИНТЕРФЕЙС ИГРЫ (Скрыт в начале) -->
+    <!-- 2. ГЛАВНОЕ МЕНЮ (DASHBOARD) -->
+    <div id="dashboard" style="display: none;">
+        <!-- Шапка профиля -->
+        <div class="profile-header">
+            <div class="avatar-circle" id="user-avatar">?</div>
+            <div class="user-info">
+                <h2 id="dash-username">Игрок</h2>
+                <p class="connections"><i class="fas fa-user-friends"></i> 0 Connections</p>
+            </div>
+        </div>
+
+        <!-- Список игр -->
+        <div class="games-section">
+            <h3>Recommend for You</h3>
+            <div class="games-grid" id="games-list">
+                <!-- Сюда JavaScript добавит игры -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. ИНТЕРФЕЙС ИГРЫ -->
     <div id="game-ui" style="display: none;">
         <div id="controls">
-            <div class="btn" id="btnMove" style="background: rgba(0,0,255,0.3);"></div>
-            <div class="btn" id="btnJump" style="background: rgba(255,0,0,0.3);"></div>
+            <div class="btn" id="btnMove"></div>
+            <div class="btn" id="btnJump"></div>
         </div>
-        <div id="player-name">Гость</div>
+        <button id="btn-exit" onclick="location.reload()">Exit</button>
     </div>
 
     <!-- Библиотеки -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <!-- Firebase (Серверная часть) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
-    <!-- Наш код -->
     <script src="game.js"></script>
 </body>
 </html>
