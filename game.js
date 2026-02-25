@@ -1,4 +1,4 @@
-// --- КОНФИГУРАЦИЯ ---
+// --- FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyB_1fSgljQJV73dVAt1H-Atvr4j1MGJDiA",
   authDomain: "pocketblox-e1290.firebaseapp.com",
@@ -15,20 +15,20 @@ const auth = firebase.auth();
 const db = firebase.database();
 
 let currentUser = null;
-let userData = {}; // Тут храним деньги и скин
+let userData = { username: "Guest", currency: 0, skinColor: "#0000FF" };
 let gameActive = false;
 let joystickManager = null;
+let workPoints = 0; // Зарплата (Очки)
+let salaryTimer = 1200; // 20 минут в секундах (поставим меньше для теста, но можно 1200)
 
 // --- АВТОРИЗАЦИЯ ---
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUser = user;
         document.getElementById('loading-text').style.display='none';
-        
-        // Слушаем изменения денег и скина
         db.ref('users/' + user.uid).on('value', snap => {
-            userData = snap.val() || { username: "Player", currency: 0, skinColor: "#0000FF" };
-            updateDashboardUI();
+            userData = snap.val() || userData;
+            updateMenuUI();
         });
     } else {
         document.getElementById('loading-text').style.display='none';
@@ -36,247 +36,268 @@ auth.onAuthStateChanged(user => {
     }
 });
 
-function login() {
-    const e = document.getElementById('email').value;
-    const p = document.getElementById('password').value;
-    auth.signInWithEmailAndPassword(e, p).catch(err => alert(err.message));
-}
-function register() {
-    const e = document.getElementById('email').value;
-    const p = document.getElementById('password').value;
+function login() { auth.signInWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value).catch(e=>alert(e.message)); }
+function register() { 
     const n = document.getElementById('username').value;
-    if(!n) return alert("Nickname!");
-    auth.createUserWithEmailAndPassword(e, p).then(c => {
-        // Даем 100 R$ при регистрации
-        db.ref('users/' + c.user.uid).set({ 
-            username: n, email: e, searchName: n.toLowerCase(),
-            currency: 100, skinColor: "#0000FF" 
-        });
-    }).catch(err => alert(err.message));
+    auth.createUserWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value).then(c => {
+        db.ref('users/'+c.user.uid).set({username:n, currency:0, skinColor:"#0000FF"});
+    }).catch(e=>alert(e.message)); 
 }
 function logout() { auth.signOut(); location.reload(); }
 
-// --- UI МЕНЮ ---
-function updateDashboardUI() {
+// --- МЕНЮ И МАГАЗИН ---
+function updateMenuUI() {
     document.getElementById('auth-screen').style.display='none';
     document.getElementById('dashboard').style.display='flex';
     document.getElementById('dash-username').innerText = userData.username;
     document.getElementById('dash-money').innerText = userData.currency;
     document.getElementById('dash-avatar').innerText = userData.username[0];
-    renderShop();
-    renderGames();
-}
-
-function switchTab(t) {
-    document.querySelectorAll('.tab-content').forEach(c => c.style.display='none');
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-'+t).style.display='block';
     
-    // Подсветка кнопок
-    const btns = document.querySelectorAll('.tab-btn');
-    if(t==='games') btns[0].classList.add('active');
-    if(t==='shop') btns[1].classList.add('active');
-    if(t==='friends') btns[2].classList.add('active');
-}
-
-function renderGames() {
-    const list = document.getElementById('games-list');
-    if(list.innerHTML !== "") return; // Чтобы не перерисовывать
-    const games = [
-        { id: "city", title: "Blox City", color: "#44aa44", icon: "🏙️" },
-        { id: "parkour", title: "Obby Parkour", color: "#aa4444", icon: "🔥" },
-        { id: "space", title: "Moon Base", color: "#222244", icon: "🚀" }
-    ];
-    games.forEach(g => {
-        list.innerHTML += `<div class="game-card" onclick="startGame('${g.id}')">
-            <div class="game-icon" style="background:${g.color}">${g.icon}</div>
-            <div style="flex-grow:1"><h4>${g.title}</h4></div>
-            <button class="play-small">PLAY</button>
+    // Магазин
+    const items = [ {c:"#0000FF",p:0,n:"Blue"}, {c:"#FF0000",p:50,n:"Red"}, {c:"#000000",p:100,n:"Black"} ];
+    const list = document.getElementById('shop-list'); list.innerHTML='';
+    items.forEach(i => {
+        const owned = userData.skinColor === i.c;
+        list.innerHTML += `<div class="shop-item">
+            <div style="height:40px;background:${i.c};margin-bottom:5px;"></div>
+            <b>${i.n}</b>
+            <button class="btn-buy" onclick="${owned?'':`buy('${i.c}',${i.p})`}">${owned?'OWNED':i.p+' R$'}</button>
         </div>`;
     });
 }
-
-// --- МАГАЗИН ---
-function renderShop() {
-    const list = document.getElementById('shop-list');
-    list.innerHTML = '';
-    const items = [
-        { name: "Blue Shirt", color: "#0000FF", price: 0 },
-        { name: "Red Shirt", color: "#FF0000", price: 50 },
-        { name: "Green Shirt", color: "#00FF00", price: 50 },
-        { name: "Black Shirt", color: "#111111", price: 100 },
-        { name: "Gold Shirt", color: "#FFD700", price: 500 }
-    ];
-
-    items.forEach(item => {
-        const isOwned = (userData.skinColor === item.color);
-        const btnText = isOwned ? "OWNED" : `${item.price} R$`;
-        const btnClass = isOwned ? "btn-buy owned" : "btn-buy";
-        const onclick = isOwned ? "" : `buyItem('${item.color}', ${item.price})`;
-
-        list.innerHTML += `
-            <div class="shop-item">
-                <div class="item-preview" style="background:${item.color}"></div>
-                <b>${item.name}</b>
-                <button class="${btnClass}" onclick="${onclick}">${btnText}</button>
-            </div>
-        `;
-    });
+function buy(color, price) {
+    if(userData.currency>=price) db.ref('users/'+currentUser.uid).update({currency:userData.currency-price, skinColor:color});
+    else alert('Need more money!');
 }
 
-function buyItem(color, price) {
-    if(userData.currency >= price) {
-        db.ref('users/' + currentUser.uid).update({
-            currency: userData.currency - price,
-            skinColor: color
-        });
-    } else {
-        alert("Not enough Rubloxi!");
-    }
-}
-
-// --- НАСТРОЙКИ ---
-function openSettings() { document.getElementById('settings-modal').style.display='flex'; }
-function closeSettings() { document.getElementById('settings-modal').style.display='none'; }
-
-// --- ПОИСК ДРУЗЕЙ ---
-function searchUsers() {
-    const val = document.getElementById('search-input').value.toLowerCase();
-    const res = document.getElementById('search-results');
-    res.innerHTML = 'Searching...';
-    db.ref('users').once('value').then(snap => {
-        res.innerHTML = '';
-        snap.forEach(c => {
-            const u = c.val();
-            if(u.username.toLowerCase().includes(val) && c.key !== currentUser.uid) {
-                res.innerHTML += `<div class="user-card"><span>${u.username}</span><button onclick="sendReq('${c.key}')" class="play-small" style="padding:5px 10px; font-size:10px;">ADD</button></div>`;
-            }
-        });
-        if(res.innerHTML==='') res.innerHTML='Not found';
-    });
-}
-function sendReq(uid) { db.ref(`friend_requests/${uid}/${currentUser.uid}`).set({username:userData.username}); alert('Sent!'); }
-
-
-// --- ИГРОВОЙ ДВИЖОК ---
-function exitGame() { gameActive = false; location.reload(); }
-
-function sendChat() {
-    const i = document.getElementById('chat-input');
-    if(i.value.trim()) db.ref('games/global/chat').push({user:userData.username, text:i.value});
-    i.value='';
-}
-
-function startGame(mode) {
+// --- ИГРА: PIZZA WORK ---
+function startGame() {
     gameActive = true;
     document.getElementById('dashboard').style.display='none';
     document.getElementById('game-ui').style.display='block';
+    workPoints = 0;
+    salaryTimer = 20 * 60; // 20 минут (1200 сек)
+    updateHUD();
     
-    // Чат
-    db.ref('games/global/chat').limitToLast(5).on('child_added', s => {
-        const d = s.val();
-        const b = document.getElementById('chat-messages');
-        b.innerHTML += `<div><span style="color:#00d2ff">${d.user}:</span> ${d.text}</div>`;
-        b.scrollTop = b.scrollHeight;
-    });
+    // Запускаем таймер зарплаты
+    setInterval(() => {
+        if(!gameActive) return;
+        salaryTimer--;
+        if(salaryTimer <= 0) {
+            // Выплата зарплаты!
+            const salary = Math.floor(workPoints / 100); // 100 очков = 1 R$
+            if(salary > 0) {
+                db.ref('users/'+currentUser.uid).update({currency: userData.currency + salary});
+                alert(`PAYCHECK! You earned ${salary} R$`);
+                workPoints = 0;
+            } else {
+                alert("Paycheck! You didn't work enough.");
+            }
+            salaryTimer = 20 * 60;
+        }
+        updateHUD();
+    }, 1000);
 
+    init3D();
+}
+
+function updateHUD() {
+    document.getElementById('game-score').innerText = workPoints;
+    const m = Math.floor(salaryTimer/60);
+    const s = salaryTimer % 60;
+    document.getElementById('pay-timer').innerText = `${m}:${s<10?'0'+s:s}`;
+}
+
+function doJob(type) {
+    // Работа кассира
+    workPoints += 10;
+    alert("Order taken: " + type + " (+10 pts)");
+    document.getElementById('cashier-ui').style.display='none';
+    updateHUD();
+}
+
+function doSimpleJob() {
+    // Повар / Упаковщик
+    workPoints += 10;
+    // Анимация текста
+    const btn = document.getElementById('action-btn');
+    const prevText = btn.innerText;
+    btn.innerText = "+10 pts";
+    setTimeout(()=>btn.innerText=prevText, 500);
+    updateHUD();
+}
+
+function closeUI(id) { document.getElementById(id).style.display='none'; }
+function exitGame() { location.reload(); }
+
+// --- 3D МИР ---
+function init3D() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = document.getElementById('opt-shadows').checked; // Настройка теней
-    
-    const cont = document.body;
-    while(cont.querySelector('canvas')) cont.querySelector('canvas').remove();
-    cont.appendChild(renderer.domElement);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff,0.6));
-    const dl = new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(20,50,10); 
-    if(renderer.shadowMap.enabled) dl.castShadow=true; 
-    scene.add(dl);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(20,50,10); dl.castShadow=true; scene.add(dl);
 
-    // Уровень
-    let platforms = [];
-    if(mode === 'city') {
-        const f = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({color:0x333333}));
-        f.rotation.x = -Math.PI/2; if(renderer.shadowMap.enabled) f.receiveShadow=true; scene.add(f);
-        for(let i=0;i<10;i++){
-            const h=5+Math.random()*10;
-            const b=new THREE.Mesh(new THREE.BoxGeometry(4,h,4), new THREE.MeshStandardMaterial({color:0x888888}));
-            b.position.set((Math.random()-0.5)*60,h/2,(Math.random()-0.5)*60);
-            if(renderer.shadowMap.enabled) b.castShadow=true; scene.add(b); platforms.push(b);
-        }
-    } else if (mode === 'parkour') {
-        scene.background = new THREE.Color(0x330000);
-        const l = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshBasicMaterial({color:0xff0000}));
-        l.rotation.x = -Math.PI/2; scene.add(l);
-        const s = new THREE.Mesh(new THREE.BoxGeometry(5,1,5), new THREE.MeshStandardMaterial({color:0x555555}));
-        s.position.y=0.5; scene.add(s); platforms.push(s);
-        for(let i=1;i<15;i++){
-            const p=new THREE.Mesh(new THREE.BoxGeometry(3,1,3), new THREE.MeshStandardMaterial({color:0x00ff00}));
-            p.position.set((Math.random()-0.5)*8, 2+Math.random()*2, -i*5);
-            scene.add(p); platforms.push(p);
-        }
-    } else {
-        scene.background = new THREE.Color(0x000000);
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({color:0x555555}));
-        m.rotation.x = -Math.PI/2; scene.add(m);
+    // --- ПОСТРОЙКА ПИЦЦЕРИИ ---
+    const walls = [];
+    const interactions = []; // Зоны для работы
+
+    // Пол (Трава)
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({color:0x44aa44}));
+    grass.rotation.x = -Math.PI/2; scene.add(grass);
+
+    // Пол (Пиццерия)
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(40,30), new THREE.MeshStandardMaterial({color:0xaaaaaa})); // Серый бетон
+    floor.rotation.x = -Math.PI/2; floor.position.y=0.01; scene.add(floor);
+
+    // Функция создания стены
+    function createWall(w, h, d, x, z, col=0xaa4444) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color:col}));
+        mesh.position.set(x, h/2, z); mesh.castShadow=true; mesh.receiveShadow=true;
+        scene.add(mesh); walls.push(mesh);
     }
 
-    // Персонаж (с купленным цветом)
-    const player = new THREE.Group();
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({color:0xFFD700})); head.position.y=3.5;
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(2,2,1), new THREE.MeshStandardMaterial({color: userData.skinColor})); torso.position.y=2;
-    const legMat = new THREE.MeshStandardMaterial({color:0x00FF00});
-    const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), legMat); lLeg.position.y=-1;
-    const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), legMat); rLeg.position.y=-1;
-    const lG = new THREE.Group(); lG.add(lLeg); lG.position.set(-0.5,1,0);
-    const rG = new THREE.Group(); rG.add(rLeg); rG.position.set(0.5,1,0);
-    player.add(head,torso,lG,rG);
-    player.userData={lg:lG, rg:rG};
-    scene.add(player); camera.position.set(0,5,-10);
+    // Стены здания
+    createWall(40, 6, 1, 0, -15); // Задняя
+    createWall(1, 6, 30, -20, 0); // Левая
+    createWall(1, 6, 30, 20, 0);  // Правая
+    createWall(15, 6, 1, -12.5, 15); // Передняя левая
+    createWall(15, 6, 1, 12.5, 15);  // Передняя правая (Вход по центру пустой)
 
-    // Управление
-    let moveFwd=0, moveTurn=0, vy=0;
+    // Прилавки и оборудование
+    // 1. КАССА (Спереди)
+    const register = new THREE.Mesh(new THREE.BoxGeometry(6, 1.5, 2), new THREE.MeshStandardMaterial({color:0xffffff}));
+    register.position.set(5, 0.75, 5); scene.add(register);
+    const regMachine = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 1), new THREE.MeshStandardMaterial({color:0x333333}));
+    regMachine.position.set(5, 1.7, 5); scene.add(regMachine);
+    interactions.push({ pos: new THREE.Vector3(5,0,7), type: 'cashier', radius: 4 });
+
+    // 2. ПЕЧИ (Сзади)
+    const oven = new THREE.Mesh(new THREE.BoxGeometry(8, 3, 3), new THREE.MeshStandardMaterial({color:0x222222}));
+    oven.position.set(-10, 1.5, -12); scene.add(oven);
+    interactions.push({ pos: new THREE.Vector3(-10,0,-9), type: 'cook', radius: 4 });
+
+    // 3. СТОЛ УПАКОВКИ (Слева)
+    const table = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 6), new THREE.MeshStandardMaterial({color:0x8B4513}));
+    table.position.set(-17, 0.75, 0); scene.add(table);
+    // Коробки на столе
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1), new THREE.MeshStandardMaterial({color:0xffffff}));
+    box.position.set(-17, 1.6, 0); scene.add(box);
+    interactions.push({ pos: new THREE.Vector3(-14,0,0), type: 'box', radius: 4 });
+
+
+    // --- ПЕРСОНАЖ (С РУКАМИ И НОГАМИ) ---
+    const player = new THREE.Group();
+    // Тело
+    const bodyMat = new THREE.MeshStandardMaterial({color: userData.skinColor}); // Цвет из магазина
+    const skinMat = new THREE.MeshStandardMaterial({color: 0xFFD700}); // Желтая кожа
+    const legsMat = new THREE.MeshStandardMaterial({color: 0x228B22}); // Зеленые штаны
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), skinMat); head.position.y=3.5;
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(2,2,1), bodyMat); torso.position.y=2;
+    
+    // Группы для анимации конечностей
+    const lLegG = new THREE.Group(); 
+    const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), legsMat); lLeg.position.y=-1; 
+    lLegG.add(lLeg); lLegG.position.set(-0.5,1,0);
+
+    const rLegG = new THREE.Group(); 
+    const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), legsMat); rLeg.position.y=-1; 
+    rLegG.add(rLeg); rLegG.position.set(0.5,1,0);
+
+    const lArmG = new THREE.Group(); 
+    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), skinMat); lArm.position.y=-1; 
+    lArmG.add(lArm); lArmG.position.set(-1.5,3,0);
+
+    const rArmG = new THREE.Group(); 
+    const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), skinMat); rArm.position.y=-1; 
+    rArmG.add(rArm); rArmG.position.set(1.5,3,0);
+
+    player.add(head, torso, lLegG, rLegG, lArmG, rArmG);
+    player.userData = { lg:lLegG, rg:rLegG, la:lArmG, ra:rArmG };
+    scene.add(player); camera.position.set(0,8,-12);
+
+    // УПРАВЛЕНИЕ
+    let moveFwd=0, moveTurn=0;
     const z = document.getElementById('joystick-zone'); z.innerHTML='';
-    joystickManager = nipplejs.create({zone:z, mode:'static', position:{left:'50%', top:'50%'}, color:'white', size: 100});
+    joystickManager = nipplejs.create({zone:z, mode:'static', position:{left:'50%', top:'50%'}, color:'white'});
     joystickManager.on('move', (e,d) => {
-        // ЗАМЕДЛЕНИЕ СКОРОСТИ: 0.08 вместо 0.15
-        moveFwd = Math.sin(d.angle.radian)*Math.min(d.force,2)*0.08;
-        moveTurn = Math.cos(d.angle.radian)*0.06;
+        moveFwd = Math.sin(d.angle.radian)*Math.min(d.force,2)*0.1;
+        moveTurn = Math.cos(d.angle.radian)*0.08;
     });
     joystickManager.on('end', () => {moveFwd=0; moveTurn=0;});
-    
-    // Прыжок
+
+    let vy=0;
     document.getElementById('btnJump').addEventListener('touchstart', e=>{e.preventDefault(); if(player.position.y<=0.1) vy=0.3;});
+
+
+    // --- ИГРОВОЙ ЦИКЛ ---
+    function checkInteractions() {
+        let activeZone = null;
+        interactions.forEach(zone => {
+            if(player.position.distanceTo(zone.pos) < zone.radius) {
+                activeZone = zone.type;
+            }
+        });
+
+        const cashierUI = document.getElementById('cashier-ui');
+        const actionBtn = document.getElementById('action-btn');
+
+        // Логика UI
+        if (activeZone === 'cashier') {
+            if(cashierUI.style.display === 'none') cashierUI.style.display = 'block';
+            actionBtn.style.display = 'none';
+        } else if (activeZone === 'cook') {
+            cashierUI.style.display = 'none';
+            actionBtn.style.display = 'flex';
+            actionBtn.innerText = "COOK";
+        } else if (activeZone === 'box') {
+            cashierUI.style.display = 'none';
+            actionBtn.style.display = 'flex';
+            actionBtn.innerText = "BOX";
+        } else {
+            // Если отошли
+            cashierUI.style.display = 'none';
+            actionBtn.style.display = 'none';
+        }
+    }
 
     function animate() {
         if(!gameActive) return;
         requestAnimationFrame(animate);
 
+        // Движение
         if(moveFwd!==0) {
             player.translateZ(moveFwd);
             player.rotation.y -= moveTurn;
-            const t = Date.now()*0.01; // Замедленная анимация ног
+            const t = Date.now()*0.015;
             player.userData.lg.rotation.x = Math.sin(t);
             player.userData.rg.rotation.x = -Math.sin(t);
+            player.userData.la.rotation.x = -Math.sin(t);
+            player.userData.ra.rotation.x = Math.sin(t);
         } else {
             player.userData.lg.rotation.x=0; player.userData.rg.rotation.x=0;
+            player.userData.la.rotation.x=0; player.userData.ra.rotation.x=0;
         }
 
-        if(mode==='parkour' && player.position.y < 0.5) { player.position.set(0,5,0); vy=0; }
+        // Гравитация
         if(player.position.y>0 || vy>0) { player.position.y+=vy; vy-=0.015; }
         else { player.position.y=0; vy=0; }
 
-        const o = new THREE.Vector3(0,6,-10).applyMatrix4(player.matrixWorld);
+        // Проверка работы
+        checkInteractions();
+
+        // Камера
+        const o = new THREE.Vector3(0,7,-10).applyMatrix4(player.matrixWorld);
         camera.position.lerp(o, 0.1);
         camera.lookAt(player.position.x, player.position.y+2, player.position.z);
+        
         renderer.render(scene, camera);
     }
-    window.addEventListener('resize', () => {
-        camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
     animate();
 }
