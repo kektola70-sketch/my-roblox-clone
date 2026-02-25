@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>My Roblox Clone</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none; /* Чтобы клики проходили сквозь пустоту */
+        }
+        .btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            border: 2px solid #fff;
+            pointer-events: auto;
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body>
+    <!-- Интерфейс управления -->
+    <div id="controls">
+        <div class="btn" id="btnMove" style="background: rgba(0,0,255,0.3);"></div>
+        <div class="btn" id="btnJump" style="background: rgba(255,0,0,0.3);"></div>
+    </div>
+
+    <!-- Подключаем Three.js через интернет -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Наш скрипт игры -->
+    <script src="game.js"></script>
+</body>
+</html>
