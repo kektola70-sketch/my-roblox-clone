@@ -2,64 +2,51 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket Blox | Official Site</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Pocket Blox</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 
-    <!-- НАВИГАЦИЯ -->
-    <nav>
-        <div class="logo">PocketBlox</div>
-        <div class="nav-links">
-            <a href="#" class="active">Games</a>
-            <a href="#">Avatar</a>
-            <a href="#">Create</a>
-        </div>
-        <div class="auth-buttons" id="auth-btn-group">
-            <button onclick="openModal('login')">Log In</button>
-            <button onclick="openModal('register')" class="btn-primary">Sign Up</button>
-        </div>
-        <div class="user-profile" id="user-profile" style="display:none;">
-            <span id="nav-username">Player</span>
-            <div class="avatar-mini" id="nav-avatar"></div>
-            <button onclick="logout()" class="btn-logout"><i class="fas fa-sign-out-alt"></i></button>
-        </div>
-    </nav>
-
-    <!-- БАННЕР -->
-    <header class="hero">
-        <h1>Welcome to the Blox Metaverse</h1>
-        <p>Join millions of players creating and exploring via PocketBlox App.</p>
-    </header>
-
-    <!-- СПИСОК ИГР (ПЛЕЙСЫ) -->
-    <div class="container">
-        <h2>Recommended for You</h2>
-        <div class="games-grid" id="games-grid">
-            <!-- Игры загрузятся через JS -->
+    <!-- 1. ЭКРАН ВХОДА (SPLASH SCREEN) -->
+    <div id="auth-screen">
+        <div class="login-box">
+            <h1>Pocket Blox</h1>
+            <p id="status-text">Загрузка...</p>
+            
+            <div id="login-forms" style="display:none;">
+                <input type="email" id="email" placeholder="Email">
+                <input type="password" id="password" placeholder="Пароль">
+                <input type="text" id="username" placeholder="Никнейм (только для регистрации)">
+                
+                <button onclick="login()" class="btn-login">Войти</button>
+                <button onclick="register()" class="btn-register">Создать аккаунт</button>
+            </div>
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ВХОДА/РЕГИСТРАЦИИ -->
-    <div id="auth-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h2 id="modal-title">Log In</h2>
-            <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Password">
-            <input type="text" id="username" placeholder="Username" style="display:none;">
-            <p id="error-msg"></p>
-            <button onclick="handleAuth()" id="auth-action-btn">Log In</button>
-            <p class="switch-auth" onclick="toggleAuthMode()" id="switch-text">No account? Sign Up</p>
+    <!-- 2. ИНТЕРФЕЙС ИГРЫ (Скрыт) -->
+    <div id="game-ui">
+        <div id="player-info">
+            <div id="avatar-face">🙂</div>
+            <span id="ui-username">Player</span>
+        </div>
+
+        <button id="btn-logout" onclick="logout()">Выйти</button>
+
+        <div id="controls">
+            <div class="control-btn" id="btnMove">🏃</div>
+            <div class="control-btn" id="btnJump">⬆️</div>
         </div>
     </div>
 
-    <!-- FIREBASE -->
+    <!-- БИБЛИОТЕКИ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="site.js"></script>
+
+    <!-- СКРИПТ ИГРЫ -->
+    <script src="game.js"></script>
 </body>
 </html>
