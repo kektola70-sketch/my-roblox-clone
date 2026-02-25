@@ -16,9 +16,9 @@ const db = firebase.database();
 
 let currentUser = null;
 let joystickManager = null;
-let gameActive = false; // Чтобы останавливать игру при выходе
+let gameActive = false;
 
-// --- АВТОРИЗАЦИЯ И МЕНЮ ---
+// --- АВТОРИЗАЦИЯ ---
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUser = user;
@@ -51,6 +51,7 @@ function register() {
 
 function logout() { auth.signOut(); location.reload(); }
 
+// --- МЕНЮ ---
 function openDashboard(username) {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
@@ -58,11 +59,10 @@ function openDashboard(username) {
     document.getElementById('dash-username').innerText = username;
     document.getElementById('dash-avatar').innerText = username[0];
 
-    // Генерация списка игр с разными ID
     const games = [
-        { id: "city", title: "Blox City RP", icon: "🏙️", color: "#44aa44", desc: "Hangout & Roleplay" },
-        { id: "parkour", title: "Floor is Lava", icon: "🔥", color: "#aa4444", desc: "Jump or Die!" },
-        { id: "space", title: "Moon Base", icon: "🚀", color: "#222244", desc: "Low Gravity" }
+        { id: "city", title: "Blox City RP", icon: "🏙️", color: "#44aa44", desc: "Hangout" },
+        { id: "parkour", title: "Floor is Lava", icon: "🔥", color: "#aa4444", desc: "Obby" },
+        { id: "space", title: "Moon Base", icon: "🚀", color: "#222244", desc: "Space" }
     ];
     
     const gList = document.getElementById('games-list');
@@ -87,13 +87,12 @@ function exitGame() {
     location.reload(); 
 }
 
-// --- 3. ИГРОВОЙ ДВИЖОК ---
+// --- ИГРОВОЙ ДВИЖОК ---
 function startGame(gameMode) {
     gameActive = true;
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('game-ui').style.display = 'block';
 
-    // Настройка сцены
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -104,130 +103,140 @@ function startGame(gameMode) {
     if(oldCanvas) oldCanvas.remove();
     document.body.appendChild(renderer.domElement);
 
-    // Освещение
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(20, 50, 10);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    // Глобальные переменные физики
     let gravity = 0.015;
     let jumpPower = 0.3;
-    let platforms = []; // Массив для проверки столкновений
-    let isLava = false; // Для паркура
+    let platforms = [];
 
-    // === ЗАГРУЗКА УРОВНЕЙ ===
-    function loadLevel(mode) {
-        if (mode === 'city') {
-            // --- ГОРОД ---
-            scene.background = new THREE.Color(0x87CEEB); // Голубое небо
-            scene.fog = new THREE.Fog(0x87CEEB, 10, 80);
-            
-            // Асфальт
-            const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-            floor.rotation.x = -Math.PI / 2;
-            floor.receiveShadow = true;
-            scene.add(floor);
-
-            // Здания
-            for(let i=0; i<20; i++) {
-                const h = 10 + Math.random() * 20;
-                const building = new THREE.Mesh(new THREE.BoxGeometry(6, h, 6), new THREE.MeshStandardMaterial({ color: 0x888888 }));
-                building.position.set((Math.random()-0.5)*100, h/2, (Math.random()-0.5)*100);
-                building.castShadow = true;
-                scene.add(building);
-                
-                // Окна (светятся)
-                const win = new THREE.Mesh(new THREE.BoxGeometry(6.1, h-2, 6.1), new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent:true, opacity:0.1 }));
-                win.position.copy(building.position);
-                scene.add(win);
-                
-                platforms.push(building); // Можно запрыгнуть на здание
-            }
-        } 
-        else if (mode === 'parkour') {
-            // --- ПАРКУР ---
-            scene.background = new THREE.Color(0x220000); // Темно-красное небо
-            scene.fog = new THREE.Fog(0x220000, 10, 60);
-            isLava = true; // Пол убивает
-
-            // Лава
-            const lava = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-            lava.rotation.x = -Math.PI / 2;
-            scene.add(lava);
-
-            // Стартовая платформа
-            const startPlat = new THREE.Mesh(new THREE.BoxGeometry(10, 1, 10), new THREE.MeshStandardMaterial({ color: 0x444444 }));
-            startPlat.position.set(0, 0.5, 0);
-            scene.add(startPlat);
-            platforms.push(startPlat);
-
-            // Паркур блоки
-            for(let i=1; i<15; i++) {
-                const size = 3;
-                const plat = new THREE.Mesh(new THREE.BoxGeometry(size, 1, size), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
-                // Каждый блок чуть дальше и выше/ниже
-                plat.position.set(0, 2 + Math.random()*2, -i * 6); 
-                plat.castShadow = true;
-                scene.add(plat);
-                platforms.push(plat);
-            }
-        } 
-        else if (mode === 'space') {
-            // --- КОСМОС ---
-            scene.background = new THREE.Color(0x000000); // Космос
-            gravity = 0.005; // Низкая гравитация
-            jumpPower = 0.4; // Высокий прыжок
-
-            // Лунный грунт
-            const moon = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1 }));
-            moon.rotation.x = -Math.PI / 2;
-            moon.receiveShadow = true;
-            scene.add(moon);
-
-            // Звезды
-            const starsGeo = new THREE.BufferGeometry();
-            const starsCnt = 1000;
-            const posArray = new Float32Array(starsCnt * 3);
-            for(let i=0; i<starsCnt*3; i++) posArray[i] = (Math.random()-0.5)*500;
-            starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-            const starsMat = new THREE.PointsMaterial({size: 0.5, color: 0xffffff});
-            scene.add(new THREE.Points(starsGeo, starsMat));
-
-            // Камни
-            for(let i=0; i<20; i++) {
-                const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(2), new THREE.MeshStandardMaterial({ color: 0x555555 }));
-                rock.position.set((Math.random()-0.5)*80, 1, (Math.random()-0.5)*80);
-                rock.castShadow = true;
-                scene.add(rock);
-            }
+    // --- ГЕНЕРАЦИЯ УРОВНЯ ---
+    if (gameMode === 'city') {
+        scene.background = new THREE.Color(0x87CEEB);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        for(let i=0; i<20; i++) {
+            const h = 10 + Math.random() * 20;
+            const building = new THREE.Mesh(new THREE.BoxGeometry(6, h, 6), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+            building.position.set((Math.random()-0.5)*100, h/2, (Math.random()-0.5)*100);
+            building.castShadow = true;
+            scene.add(building);
+            platforms.push(building);
+        }
+    } else if (gameMode === 'parkour') {
+        scene.background = new THREE.Color(0x220000);
+        const lava = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        lava.rotation.x = -Math.PI / 2;
+        scene.add(lava);
+        const start = new THREE.Mesh(new THREE.BoxGeometry(10,1,10), new THREE.MeshStandardMaterial({color:0x555555}));
+        start.position.y = 0.5; scene.add(start); platforms.push(start);
+        for(let i=1; i<20; i++) {
+            const p = new THREE.Mesh(new THREE.BoxGeometry(3,1,3), new THREE.MeshStandardMaterial({color:0x00ff00}));
+            p.position.set((Math.random()-0.5)*10, 2+Math.random()*2, -i*5);
+            p.castShadow = true; scene.add(p); platforms.push(p);
+        }
+    } else if (gameMode === 'space') {
+        scene.background = new THREE.Color(0x000000);
+        gravity = 0.005; jumpPower = 0.4;
+        const moon = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+        moon.rotation.x = -Math.PI / 2;
+        scene.add(moon);
+        for(let i=0; i<30; i++) {
+            const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(2), new THREE.MeshStandardMaterial({ color: 0x555555 }));
+            rock.position.set((Math.random()-0.5)*100, 1, (Math.random()-0.5)*100);
+            scene.add(rock);
         }
     }
 
-    loadLevel(gameMode);
+    // --- НОВЫЙ СКИН (ROBLOX STYLE) ---
+    function createRobloxAvatar() {
+        const character = new THREE.Group();
 
-    // --- ИГРОК ---
-    const player = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 1), new THREE.MeshStandardMaterial({color: 0x0088ff}));
-    body.position.y = 2;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({color: 0xffd700}));
-    head.position.y = 3.6;
-    player.add(body, head);
-    
-    // Ноги (для анимации)
-    const legGeo = new THREE.BoxGeometry(0.7, 2, 0.7);
-    const legMat = new THREE.MeshStandardMaterial({color: 0x111111});
-    const lLeg = new THREE.Mesh(legGeo, legMat); lLeg.position.y = -1;
-    const rLeg = new THREE.Mesh(legGeo, legMat); rLeg.position.y = -1;
-    const lGroup = new THREE.Group(); lGroup.add(lLeg); lGroup.position.set(-0.4, 1, 0);
-    const rGroup = new THREE.Group(); rGroup.add(rLeg); rGroup.position.set(0.4, 1, 0);
-    player.add(lGroup, rGroup);
+        // Материалы (Классический Нуб)
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xFFD700 }); // Желтая кожа
+        const torsoMat = new THREE.MeshStandardMaterial({ color: 0x0000FF }); // Синяя майка
+        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x44AA44 }); // Зеленые штаны
 
+        // 1. Голова (Слегка скругленный куб или цилиндр, возьмем куб для стиля R6)
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), skinMat);
+        head.position.y = 4.6;
+        head.castShadow = true;
+        character.add(head);
+
+        // Лицо (Глаза и рот - просто черные блоки)
+        const eyeGeo = new THREE.BoxGeometry(0.15, 0.15, 0.1);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.3, 0.1, 0.6); // На лице
+        head.add(leftEye);
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(0.3, 0.1, 0.6);
+        head.add(rightEye);
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.1), eyeMat);
+        mouth.position.set(0, -0.3, 0.6);
+        head.add(mouth);
+
+        // 2. Торс (Квадратный блок)
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), torsoMat);
+        torso.position.y = 3;
+        torso.castShadow = true;
+        character.add(torso);
+
+        // 3. Руки (Отдельные блоки)
+        const armGeo = new THREE.BoxGeometry(1, 2, 1);
+        
+        // Левая рука (Группа для вращения в плече)
+        const leftArmGroup = new THREE.Group();
+        const leftArm = new THREE.Mesh(armGeo, skinMat);
+        leftArm.position.y = -1; // Сдвиг вниз, чтобы ось вращения была сверху
+        leftArmGroup.add(leftArm);
+        leftArmGroup.position.set(-1.6, 4, 0); // Плечо
+        character.add(leftArmGroup);
+
+        // Правая рука
+        const rightArmGroup = new THREE.Group();
+        const rightArm = new THREE.Mesh(armGeo, skinMat);
+        rightArm.position.y = -1;
+        rightArmGroup.add(rightArm);
+        rightArmGroup.position.set(1.6, 4, 0); // Плечо
+        character.add(rightArmGroup);
+
+        // 4. Ноги (Отдельные блоки)
+        const legGeo = new THREE.BoxGeometry(1, 2, 1);
+
+        // Левая нога (Группа для вращения в бедре)
+        const leftLegGroup = new THREE.Group();
+        const leftLeg = new THREE.Mesh(legGeo, pantsMat);
+        leftLeg.position.y = -1;
+        leftLegGroup.add(leftLeg);
+        leftLegGroup.position.set(-0.5, 2, 0); // Бедро
+        character.add(leftLegGroup);
+
+        // Правая нога
+        const rightLegGroup = new THREE.Group();
+        const rightLeg = new THREE.Mesh(legGeo, pantsMat);
+        rightLeg.position.y = -1;
+        rightLegGroup.add(rightLeg);
+        rightLegGroup.position.set(0.5, 2, 0); // Бедро
+        character.add(rightLegGroup);
+
+        // Сохраняем ссылки для анимации
+        character.userData = { 
+            lLeg: leftLegGroup, rLeg: rightLegGroup, 
+            lArm: leftArmGroup, rArm: rightArmGroup 
+        };
+
+        return character;
+    }
+
+    const player = createRobloxAvatar();
     scene.add(player);
-    camera.position.set(0, 5, 10);
+    camera.position.set(0, 6, -10);
 
     // --- УПРАВЛЕНИЕ ---
     const joyZone = document.getElementById('joystick-zone');
@@ -247,25 +256,20 @@ function startGame(gameMode) {
     document.getElementById('btnJump').addEventListener('touchstart', (e) => { e.preventDefault(); if(onGround) vy = jumpPower; });
     document.getElementById('btnJump').addEventListener('mousedown', () => { if(onGround) vy = jumpPower; });
 
-    // --- ФИЗИКА И ЦИКЛ ---
+    // --- ЦИКЛ ---
     function checkCollision() {
-        // Простая проверка: находимся ли мы над платформой
         let groundY = 0;
         let isOverPlatform = false;
-
         platforms.forEach(plat => {
-            // Упрощенная коллизия: проверяем границы по X и Z
             const box = new THREE.Box3().setFromObject(plat);
             if (player.position.x >= box.min.x && player.position.x <= box.max.x &&
                 player.position.z >= box.min.z && player.position.z <= box.max.z) {
-                // Если мы над платформой, то "пол" поднимается до её верха
                 if (player.position.y >= box.max.y - 0.5) { 
                     groundY = Math.max(groundY, box.max.y);
                     isOverPlatform = true;
                 }
             }
         });
-
         return { y: groundY, hit: isOverPlatform };
     }
 
@@ -273,46 +277,45 @@ function startGame(gameMode) {
         if(!gameActive) return;
         requestAnimationFrame(animate);
 
-        // 1. Движение
+        // Движение
         if(moveFwd !== 0) {
             player.translateZ(moveFwd);
             player.rotation.y -= moveTurn;
-            // Анимация ног
-            lGroup.rotation.x = Math.sin(Date.now()*0.01);
-            rGroup.rotation.x = -Math.sin(Date.now()*0.01);
+            
+            // Анимация ходьбы (Машем руками и ногами)
+            const speed = Date.now() * 0.01;
+            player.userData.lLeg.rotation.x = Math.sin(speed);
+            player.userData.rLeg.rotation.x = -Math.sin(speed);
+            player.userData.lArm.rotation.x = -Math.sin(speed); // Руки идут противофазой ногам
+            player.userData.rArm.rotation.x = Math.sin(speed);
         } else {
-            lGroup.rotation.x = 0;
-            rGroup.rotation.x = 0;
+            // Стоим смирно
+            player.userData.lLeg.rotation.x = 0;
+            player.userData.rLeg.rotation.x = 0;
+            player.userData.lArm.rotation.x = 0;
+            player.userData.rArm.rotation.x = 0;
         }
 
-        // 2. Гравитация и Столкновения
+        // Физика
         const groundInfo = checkCollision();
-        let groundLevel = groundInfo.y;
-
-        // Логика "Лавы" (Паркур)
-        if (gameMode === 'parkour') {
-            // В паркуре пол (уровень 0) - это смерть
-            if (!groundInfo.hit && player.position.y <= 0.5) {
-                // СМЕРТЬ! Респавн
-                player.position.set(0, 5, 0);
-                vy = 0;
-            }
+        if (gameMode === 'parkour' && !groundInfo.hit && player.position.y <= 0.5) {
+            player.position.set(0, 5, 0); vy = 0; // Респавн в лаве
         }
 
-        if (player.position.y > groundLevel || vy > 0) {
+        if (player.position.y > groundInfo.y || vy > 0) {
             player.position.y += vy;
             vy -= gravity;
             onGround = false;
         } else {
-            player.position.y = groundLevel;
+            player.position.y = groundInfo.y;
             vy = 0;
             onGround = true;
         }
 
-        // 3. Камера
-        const camOff = new THREE.Vector3(0, 6, -10).applyMatrix4(player.matrixWorld);
+        // Камера
+        const camOff = new THREE.Vector3(0, 6, -12).applyMatrix4(player.matrixWorld);
         camera.position.lerp(camOff, 0.1);
-        camera.lookAt(player.position.x, player.position.y + 2, player.position.z);
+        camera.lookAt(player.position.x, player.position.y + 3, player.position.z);
 
         renderer.render(scene, camera);
     }
