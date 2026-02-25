@@ -3,50 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Pocket Blox</title>
+    <title>Pocket Blox Mobile</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Иконки -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 
-    <!-- 1. ЭКРАН ВХОДА (SPLASH SCREEN) -->
+    <!-- 1. ЭКРАН ВХОДА -->
     <div id="auth-screen">
-        <div class="login-box">
+        <div class="auth-box">
             <h1>Pocket Blox</h1>
-            <p id="status-text">Загрузка...</p>
-            
-            <div id="login-forms" style="display:none;">
+            <div id="loading">Загрузка...</div>
+            <div id="auth-forms" style="display:none;">
                 <input type="email" id="email" placeholder="Email">
                 <input type="password" id="password" placeholder="Пароль">
-                <input type="text" id="username" placeholder="Никнейм (только для регистрации)">
-                
-                <button onclick="login()" class="btn-login">Войти</button>
-                <button onclick="register()" class="btn-register">Создать аккаунт</button>
+                <input type="text" id="username" placeholder="Никнейм (для новых)">
+                <button onclick="login()" class="btn-primary">Войти</button>
+                <button onclick="register()" class="btn-sec">Создать аккаунт</button>
             </div>
         </div>
     </div>
 
-    <!-- 2. ИНТЕРФЕЙС ИГРЫ (Скрыт) -->
-    <div id="game-ui">
-        <div id="player-info">
-            <div id="avatar-face">🙂</div>
-            <span id="ui-username">Player</span>
+    <!-- 2. ГЛАВНОЕ МЕНЮ (Вертикальное) -->
+    <div id="dashboard" style="display: none;">
+        <!-- Шапка -->
+        <div class="header">
+            <div class="avatar" id="dash-avatar">?</div>
+            <div class="user-info">
+                <h3 id="dash-username">Player</h3>
+                <span class="status">Online</span>
+            </div>
+            <button onclick="logout()" class="btn-icon"><i class="fas fa-sign-out-alt"></i></button>
         </div>
 
-        <button id="btn-logout" onclick="logout()">Выйти</button>
+        <!-- Таблица Лидеров -->
+        <div class="section">
+            <h3>🏆 Top Players</h3>
+            <div id="leaderboard" class="leaderboard-list">
+                <!-- Сюда JS добавит игроков -->
+            </div>
+        </div>
 
-        <div id="controls">
-            <div class="control-btn" id="btnMove">🏃</div>
-            <div class="control-btn" id="btnJump">⬆️</div>
+        <!-- Список Игр -->
+        <div class="section">
+            <h3>🎮 Games</h3>
+            <div id="games-list" class="games-vertical">
+                <!-- Сюда JS добавит игры -->
+            </div>
         </div>
     </div>
 
-    <!-- БИБЛИОТЕКИ -->
+    <!-- 3. ИГРА (С Джойстиком) -->
+    <div id="game-ui" style="display: none;">
+        <!-- Кнопка Выход -->
+        <button id="btn-exit" onclick="exitGame()">EXIT</button>
+        
+        <!-- Зона для Джойстика (Слева внизу) -->
+        <div id="joystick-zone"></div>
+        
+        <!-- Кнопка Прыжка (Справа внизу) -->
+        <div id="btnJump">⬆️</div>
+    </div>
+
+    <!-- Библиотеки -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script> <!-- ДЖОЙСТИК -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
-    <!-- СКРИПТ ИГРЫ -->
     <script src="game.js"></script>
 </body>
 </html>
