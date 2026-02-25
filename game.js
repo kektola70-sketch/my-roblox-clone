@@ -1,4 +1,4 @@
-// --- КОНФИГУРАЦИЯ FIREBASE ---
+// --- КОНФИГУРАЦИЯ ---
 const firebaseConfig = {
   apiKey: "AIzaSyB_1fSgljQJV73dVAt1H-Atvr4j1MGJDiA",
   authDomain: "pocketblox-e1290.firebaseapp.com",
@@ -22,6 +22,38 @@ let workPoints = 0;
 let salaryTimer = 600;
 let collidables = [];
 let isRoundSkin = false;
+let hasPizzaBox = false; // Несем ли мы пиццу?
+
+// --- АУДИО СИСТЕМА (Синтезатор) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+    if(!document.getElementById('opt-sound').checked) return;
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+
+    if (type === 'jump') {
+        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'money') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+    } else if (type === 'click') {
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+    }
+}
 
 // --- АВТОРИЗАЦИЯ ---
 auth.onAuthStateChanged(user => {
@@ -68,8 +100,10 @@ function updateMenu() {
     });
 }
 function buy(color, price) {
-    if(userData.currency>=price) db.ref('users/'+currentUser.uid).update({currency:userData.currency-price, skinColor:color});
-    else alert('Недостаточно R$!');
+    if(userData.currency>=price) {
+        playSound('money');
+        db.ref('users/'+currentUser.uid).update({currency:userData.currency-price, skinColor:color});
+    } else alert('Недостаточно R$!');
 }
 function switchTab(t) {
     document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
@@ -85,7 +119,7 @@ function closeSettings() {
     isRoundSkin = document.getElementById('opt-round-skin').checked;
 }
 
-// --- ЗАПУСК ИГРЫ ---
+// --- ИГРА ---
 function startGame() {
     gameActive = true;
     document.getElementById('dashboard').style.display='none';
@@ -93,6 +127,7 @@ function startGame() {
     workPoints = 0;
     salaryTimer = 600; 
     collidables = [];
+    hasPizzaBox = false;
     
     initChat();
     
@@ -102,10 +137,11 @@ function startGame() {
         if(salaryTimer <= 0) {
             const salary = Math.floor(workPoints / 10);
             if(salary > 0) {
+                playSound('money');
                 db.ref('users/'+currentUser.uid).update({currency: userData.currency + salary});
                 alert(`ЗАРПЛАТА! +${salary} R$`);
                 workPoints = 0;
-            } else alert("Нет работы - нет зарплаты!");
+            } else alert("Вы не работали!");
             salaryTimer = 600;
         }
         updateHUD();
@@ -123,22 +159,42 @@ function updateHUD() {
 
 // Работа
 function doJob(type) {
+    playSound('click');
     workPoints += 10;
     document.getElementById('cashier-ui').style.display='none';
     showFloatText("+10 Очков");
     updateHUD();
 }
-function doSimpleJob() { doJob('work'); }
-
+function doSimpleJob(type) {
+    playSound('click');
+    if (type === 'box') {
+        hasPizzaBox = true;
+        document.getElementById('delivery-status').style.display = 'block';
+        alert("Пицца упакована! Отнеси её в дом в конце улицы.");
+    } else if (type === 'delivery') {
+        if (hasPizzaBox) {
+            hasPizzaBox = false;
+            document.getElementById('delivery-status').style.display = 'none';
+            workPoints += 50; // Много очков за доставку
+            showFloatText("+50 Очков (Доставка)");
+            updateHUD();
+        } else {
+            alert("У тебя нет пиццы!");
+        }
+    } else {
+        workPoints += 10;
+        showFloatText("+10 Очков");
+        updateHUD();
+    }
+}
 function showFloatText(text) {
     const btn = document.createElement('div');
     btn.innerText = text;
-    btn.style.cssText = "position:absolute; top:40%; left:50%; color:gold; font-size:24px; font-weight:bold; transform:translate(-50%,-50%); transition:1s; pointer-events:none; z-index:5000;";
+    btn.style.cssText = "position:absolute; top:40%; left:50%; color:gold; font-size:24px; font-weight:bold; transform:translate(-50%,-50%); transition:1s; pointer-events:none; z-index:5000; text-shadow:0 0 5px black;";
     document.body.appendChild(btn);
     setTimeout(() => { btn.style.top="30%"; btn.style.opacity="0"; }, 50);
     setTimeout(() => btn.remove(), 1000);
 }
-
 function closeUI(id) { document.getElementById(id).style.display='none'; }
 function exitGame() { location.reload(); }
 
@@ -180,9 +236,26 @@ function init3D() {
 
     const interactions = [];
 
+    // Текстура Плитки
+    function createCheckerTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,64,64);
+        ctx.fillStyle = '#CCCCCC'; ctx.fillRect(0,0,32,32); ctx.fillRect(32,32,32,32);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(10, 10);
+        return tex;
+    }
+
     // --- МИР ---
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.MeshStandardMaterial({color:0x33aa33}));
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(300,300), new THREE.MeshStandardMaterial({color:0x33aa33}));
     grass.rotation.x = -Math.PI/2; scene.add(grass);
+    
+    // Дорога
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(20, 300), new THREE.MeshStandardMaterial({color:0x333333}));
+    road.rotation.x = -Math.PI/2; road.position.y = 0.01; scene.add(road);
 
     function createBox(w, h, d, x, z, col=0xF5F5DC, isWall=true) {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({color:col}));
@@ -193,30 +266,48 @@ function init3D() {
         return mesh;
     }
 
-    // Пиццерия
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(60,60), new THREE.MeshStandardMaterial({color:0xCCCCCC}));
-    floor.rotation.x = -Math.PI/2; floor.position.y=0.02; scene.add(floor);
+    // ПИЦЦЕРИЯ
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(60,60), new THREE.MeshStandardMaterial({map: createCheckerTexture()}));
+    floor.rotation.x = -Math.PI/2; floor.position.y=0.02; floor.position.x = 40; scene.add(floor);
 
-    // Стены
-    createBox(60, 8, 2, 0, -30); // Зад
-    createBox(2, 8, 60, -30, 0); // Лево
-    createBox(2, 8, 60, 30, 0);  // Право
-    createBox(25, 8, 2, -17.5, 30); // Перед Л
-    createBox(25, 8, 2, 17.5, 30);  // Перед П
+    // Стены (Сдвинуты вправо на X=40)
+    createBox(60, 8, 2, 40, -30); // Зад
+    createBox(2, 8, 60, 10, 0); // Лево
+    createBox(2, 8, 60, 70, 0);  // Право
+    createBox(25, 8, 2, 22.5, 30); // Перед Л
+    createBox(25, 8, 2, 57.5, 30);  // Перед П
 
-    // Прилавок (Касса)
-    createBox(40, 2, 3, 0, 10, 0xFFFFFF); 
-    // Увеличил радиус до 6, чтобы точно доставало
-    interactions.push({pos: new THREE.Vector3(-10,0,13), type:'cashier', radius:6});
-    interactions.push({pos: new THREE.Vector3(10,0,13), type:'cashier', radius:6});
+    // Мебель
+    createBox(40, 2, 3, 40, 10, 0xFFFFFF); // Прилавок
+    interactions.push({pos: new THREE.Vector3(30,0,13), type:'cashier', radius:6});
+    interactions.push({pos: new THREE.Vector3(50,0,13), type:'cashier', radius:6});
     
-    // Кухня
-    createBox(10, 4, 4, -15, -28, 0x111111);
-    interactions.push({pos: new THREE.Vector3(-15,0,-24), type:'cook', radius:6, label:"ГОТОВИТЬ"});
+    createBox(10, 4, 4, 25, -28, 0x111111); // Печь
+    interactions.push({pos: new THREE.Vector3(25,0,-24), type:'cook', radius:6, label:"ГОТОВИТЬ"});
     
-    // Упаковка
-    createBox(8, 2, 4, -25, -5, 0x8B4513);
-    interactions.push({pos: new THREE.Vector3(-22,0,-5), type:'box', radius:6, label:"УПАКОВАТЬ"});
+    createBox(8, 2, 4, 15, -5, 0x8B4513); // Стол упаковки
+    interactions.push({pos: new THREE.Vector3(18,0,-5), type:'box', radius:6, label:"УПАКОВАТЬ"});
+
+    // Босс
+    createBox(6, 2, 4, 60, -20, 0x550000); // Стол
+    createBox(3, 3, 3, 60, -25, 0x000000, false); // Кресло
+    interactions.push({pos: new THREE.Vector3(60,0,-25), type:'boss', radius:4, label:"БОСС (+$$$)"});
+
+    // ДОМ (Для доставки) Z=-80
+    createBox(20, 10, 20, -30, -80, 0xAA5555); // Дом
+    createBox(1, 6, 4, -20, -70, 0x654321); // Дверь
+    interactions.push({pos: new THREE.Vector3(-20,0,-65), type:'delivery', radius:6, label:"ОТДАТЬ ПИЦЦУ"});
+
+    // Деревья
+    for(let i=0; i<10; i++) {
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1,1,6), new THREE.MeshStandardMaterial({color:0x8B4513})); trunk.position.y=3;
+        const leaves = new THREE.Mesh(new THREE.DodecahedronGeometry(4), new THREE.MeshStandardMaterial({color:0x228B22})); leaves.position.y=7;
+        tree.add(trunk, leaves);
+        tree.position.set(-20, 0, i*20 - 50);
+        scene.add(tree);
+    }
+
 
     // --- ПЕРСОНАЖ ---
     const player = new THREE.Group();
@@ -225,7 +316,6 @@ function init3D() {
     const pantsMat = new THREE.MeshStandardMaterial({color: 0x228B22});
 
     if (isRoundSkin) {
-        // R15
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.7), skinMat); head.position.y=3.8;
         const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2), bodyMat); torso.position.y=2.2;
         const armGeo = new THREE.CapsuleGeometry(0.35, 1.5);
@@ -237,7 +327,6 @@ function init3D() {
         player.add(head, torso, lArm, rArm, lLeg, rLeg);
         player.userData = { la:lArm, ra:rArm, ll:lLeg, rl:rLeg, type:'round' };
     } else {
-        // R6
         const head = new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2), skinMat); head.position.y=4.6;
         const torso = new THREE.Mesh(new THREE.BoxGeometry(2,2,1), bodyMat); torso.position.y=3;
         const armGeo = new THREE.BoxGeometry(1,2,1);
@@ -250,32 +339,9 @@ function init3D() {
         player.userData = { la:lArm, ra:rArm, ll:lLeg, rl:rLeg, type:'box' };
     }
 
-    // ИСПРАВЛЕН СПАВН: Поднял Y до 5, отодвинул Z до 50
-    player.position.set(0, 5, 50);
-    scene.add(player); camera.position.set(0,10,65);
-
-    // --- NPC (ВОССТАНОВЛЕНЫ) ---
-    const npcs = [];
-    function createNPC() {
-        const npc = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,2), new THREE.MeshStandardMaterial({color: Math.random()*0xffffff}));
-        body.position.y=1;
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4), new THREE.MeshStandardMaterial({color:0xffd700}));
-        head.position.y=2.2;
-        npc.add(body, head);
-        
-        npc.position.set((Math.random()-0.5)*20, 0, 55); // Спавн на улице
-        scene.add(npc);
-
-        npcs.push({
-            mesh: npc,
-            target: new THREE.Vector3((Math.random()-0.5)*10, 0, 14), // Идут к кассе
-            state: 'walking_in',
-            timer: 0
-        });
-    }
-    for(let i=0; i<4; i++) setTimeout(createNPC, i*3000);
-
+    // СПАВН НА ДОРОГЕ
+    player.position.set(0, 5, 80);
+    scene.add(player); camera.position.set(0,10,95);
 
     // УПРАВЛЕНИЕ
     let moveFwd=0, moveTurn=0, vy=0;
@@ -286,7 +352,7 @@ function init3D() {
         moveTurn = Math.cos(d.angle.radian)*0.08;
     });
     joystickManager.on('end', () => {moveFwd=0; moveTurn=0;});
-    document.getElementById('btnJump').addEventListener('touchstart', e=>{e.preventDefault(); if(player.position.y<=0.1) vy=0.3;});
+    document.getElementById('btnJump').addEventListener('touchstart', e=>{e.preventDefault(); if(player.position.y<=0.1) { vy=0.3; playSound('jump'); }});
 
     function resolveCollision(newPos) {
         const playerBox = new THREE.Box3().setFromCenterAndSize(newPos, new THREE.Vector3(1, 2, 1));
@@ -300,17 +366,24 @@ function init3D() {
         if(!gameActive) return;
         requestAnimationFrame(animate);
 
-        // UI ОБНОВЛЕНИЕ (ПЕРВЫМ ДЕЛОМ)
+        // UI ОБНОВЛЕНИЕ
         let activeUI = null;
         interactions.forEach(zone => { if(player.position.distanceTo(zone.pos) < zone.radius) activeUI = zone; });
 
         if (activeUI) {
             if(activeUI.type==='cashier') document.getElementById('cashier-ui').style.display = 'block';
+            else if (activeUI.type==='boss') {
+                 // Пассивный доход
+                 workPoints += 0.2; 
+                 updateHUD();
+                 document.getElementById('action-btn').style.display='none';
+            }
             else {
                 document.getElementById('cashier-ui').style.display='none';
                 const btn = document.getElementById('action-btn');
                 btn.style.display='flex';
                 btn.innerText = activeUI.label;
+                btn.onclick = () => doSimpleJob(activeUI.type);
             }
         } else {
             document.getElementById('cashier-ui').style.display='none';
@@ -338,32 +411,6 @@ function init3D() {
 
         if(player.position.y>0 || vy>0) { player.position.y+=vy; vy-=0.015; }
         else { player.position.y=0; vy=0; }
-
-        // NPC
-        npcs.forEach(bot => {
-            if(bot.state === 'walking_in' || bot.state === 'walking_out') {
-                const dir = new THREE.Vector3().subVectors(bot.target, bot.mesh.position).normalize();
-                bot.mesh.position.add(dir.multiplyScalar(0.04));
-                bot.mesh.lookAt(bot.target);
-
-                if(bot.mesh.position.distanceTo(bot.target) < 1) {
-                    if(bot.state === 'walking_in') {
-                        bot.state = 'waiting';
-                        bot.timer = 300;
-                    } else {
-                        bot.mesh.position.set((Math.random()-0.5)*20, 0, 55);
-                        bot.target.set((Math.random()-0.5)*10, 0, 14);
-                        bot.state = 'walking_in';
-                    }
-                }
-            } else if (bot.state === 'waiting') {
-                bot.timer--;
-                if(bot.timer <= 0) {
-                    bot.state = 'walking_out';
-                    bot.target.set((Math.random()-0.5)*20, 0, 60);
-                }
-            }
-        });
 
         const o = new THREE.Vector3(0,7,-10).applyMatrix4(player.matrixWorld);
         camera.position.lerp(o, 0.1);
