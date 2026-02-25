@@ -1,108 +1,230 @@
-// --- 1. FIREBASE CONFIG ---
+// --- 1. FIREBASE CONFIGURATION ---
+// Твои настройки (адаптированные для работы в браузере)
 const firebaseConfig = {
-  // ВСТАВЬ СЮДА СВОИ КЛЮЧИ (apiKey и т.д.)
-  apiKey: "AIzaSy...",
-  authDomain: "...",
-  databaseURL: "...",
-  projectId: "...",
-  storageBucket: "...",
-  messagingSenderId: "...",
-  appId: "..."
+  apiKey: "AIzaSyB_1fSgljQJV73dVAt1H-Atvr4j1MGJDiA",
+  authDomain: "pocketblox-e1290.firebaseapp.com",
+  databaseURL: "https://pocketblox-e1290-default-rtdb.firebaseio.com",
+  projectId: "pocketblox-e1290",
+  storageBucket: "pocketblox-e1290.firebasestorage.app",
+  messagingSenderId: "611510454197",
+  appId: "1:611510454197:web:7c1b2ee43060ea44863bfc",
+  measurementId: "G-YF198J4W61"
 };
 
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+// Инициализация Firebase (проверка, чтобы не запускать дважды)
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
+// Получаем доступ к функциям
 const auth = firebase.auth();
 const db = firebase.database();
 
-// --- 2. УПРАВЛЕНИЕ АВТОРИЗАЦИЕЙ ---
-let isRegistering = false;
-const modal = document.getElementById('auth-modal');
+// --- 2. УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЕМ (СЕРВЕРНАЯ ЧАСТЬ) ---
 
-auth.onAuthStateChanged(user => {
+// Переменные интерфейса
+const authModal = document.getElementById('auth-modal');
+const navProfile = document.getElementById('user-profile');
+const navButtons = document.getElementById('auth-btn-group');
+let isRegistering = false; // Режим: вход или регистрация
+
+// Слушаем изменения статуса (Вошел или Вышел)
+auth.onAuthStateChanged((user) => {
     if (user) {
-        document.getElementById('auth-btn-group').style.display = 'none';
-        document.getElementById('user-profile').style.display = 'flex';
-        // Получаем имя из базы
-        db.ref('users/' + user.uid).once('value').then(snap => {
-            const name = snap.val()?.username || "Player";
-            document.getElementById('nav-username').innerText = name;
-            document.getElementById('nav-avatar').innerText = name[0];
+        // ЕСЛИ ВОШЕЛ:
+        console.log("User logged in:", user.email);
+        navButtons.style.display = 'none'; // Скрыть кнопки входа
+        navProfile.style.display = 'flex'; // Показать профиль
+        authModal.style.display = "none";  // Закрыть окно
+
+        // Загружаем Никнейм из Базы Данных
+        db.ref('users/' + user.uid).once('value').then((snapshot) => {
+            const data = snapshot.val();
+            const username = data && data.username ? data.username : "Player";
+            
+            // Обновляем шапку сайта
+            document.getElementById('nav-username').innerText = username;
+            document.getElementById('nav-avatar').innerText = username.charAt(0).toUpperCase();
         });
-        modal.style.display = "none";
+
     } else {
-        document.getElementById('auth-btn-group').style.display = 'block';
-        document.getElementById('user-profile').style.display = 'none';
+        // ЕСЛИ ВЫШЕЛ:
+        console.log("User logged out");
+        navButtons.style.display = 'block'; // Показать кнопки входа
+        navProfile.style.display = 'none';  // Скрыть профиль
     }
 });
 
+// Функция Входа / Регистрации
 function handleAuth() {
     const email = document.getElementById('email').value;
     const pass = document.getElementById('password').value;
-    const name = document.getElementById('username').value;
+    const username = document.getElementById('username').value;
     const msg = document.getElementById('error-msg');
 
+    if (!email || !pass) {
+        msg.innerText = "Please enter email and password";
+        msg.style.color = "red";
+        return;
+    }
+
     if (isRegistering) {
-        if(!name) { msg.innerText = "Need username"; return; }
+        // --- РЕГИСТРАЦИЯ ---
+        if (!username) { msg.innerText = "Please enter username"; return; }
+        
+        msg.innerText = "Creating account...";
         auth.createUserWithEmailAndPassword(email, pass)
-            .then(cred => {
-                db.ref('users/' + cred.user.uid).set({ username: name, email: email });
+            .then((userCredential) => {
+                // Сохраняем имя пользователя в базу
+                const user = userCredential.user;
+                db.ref('users/' + user.uid).set({
+                    username: username,
+                    email: email,
+                    joined: new Date().toISOString()
+                });
+                msg.innerText = "Success!";
+                msg.style.color = "green";
             })
-            .catch(e => msg.innerText = e.message);
+            .catch((error) => {
+                msg.innerText = error.message;
+                msg.style.color = "red";
+            });
+
     } else {
+        // --- ВХОД ---
+        msg.innerText = "Logging in...";
         auth.signInWithEmailAndPassword(email, pass)
-            .catch(e => msg.innerText = "Login failed");
+            .then(() => {
+                msg.innerText = "Success!";
+                msg.style.color = "green";
+            })
+            .catch((error) => {
+                msg.innerText = "Error: " + error.message;
+                msg.style.color = "red";
+            });
     }
 }
 
-function logout() { auth.signOut(); }
+// Функция Выхода
+function logout() {
+    auth.signOut();
+    location.reload(); // Перезагрузить страницу
+}
 
-// --- 3. ГЕНЕРАЦИЯ ИГР И ЗАПУСК ПРИЛОЖЕНИЯ ---
-const games = [
-    { id: "city", title: "Blox City RP", online: "1.2k", color: "#44aa44", icon: "🏙️" },
-    { id: "obby", title: "Mega Obby", online: "500", color: "#aa4444", icon: "🏃" },
-    { id: "survival", title: "Zombie Survival", online: "800", color: "#4444aa", icon: "🧟" },
-    { id: "tycoon", title: "Pizza Tycoon", online: "3.5k", color: "#aaaa44", icon: "🍕" }
+
+// --- 3. ГЕНЕРАЦИЯ ИГР И ЗАПУСК (LAUNCHER) ---
+
+// Список "Плейсов" на сервере
+const gamesData = [
+    { id: "city_rp", title: "Blox City RP", online: "1.2k", color: "#44aa44", icon: "🏙️" },
+    { id: "obby_mega", title: "Mega Obby Parkour", online: "524", color: "#aa4444", icon: "🏃" },
+    { id: "tycoon_pizza", title: "Pizza Tycoon", online: "3.5k", color: "#4444aa", icon: "🍕" },
+    { id: "zombie_survival", title: "Zombie Survival", online: "890", color: "#aaaa44", icon: "🧟" },
+    { id: "speed_run", title: "Speed Run 4", online: "200", color: "#aa44aa", icon: "⚡" }
 ];
 
-const grid = document.getElementById('games-grid');
+const gamesGrid = document.getElementById('games-grid');
 
-games.forEach(game => {
-    const card = document.createElement('div');
-    card.className = 'game-card';
-    card.innerHTML = `
-        <div class="game-thumb" style="background:${game.color}">${game.icon}</div>
-        <div class="game-info">
-            <div class="game-title">${game.title}</div>
-            <div class="game-stats">👥 ${game.online} Playing</div>
-            <!-- ССЫЛКА НА ЗАПУСК ПРИЛОЖЕНИЯ -->
-            <a href="pocketblox://play?id=${game.id}" class="play-btn" onclick="tryLaunchApp(event)">▶ PLAY</a>
-        </div>
-    `;
-    grid.appendChild(card);
-});
+// Отрисовка карточек
+if (gamesGrid) {
+    gamesData.forEach(game => {
+        const card = document.createElement('div');
+        card.className = 'game-card';
+        card.innerHTML = `
+            <div class="game-thumb" style="background:${game.color}">${game.icon}</div>
+            <div class="game-info">
+                <div class="game-title">${game.title}</div>
+                <div class="game-stats">
+                    <span>👥 ${game.online} Playing</span>
+                </div>
+                <!-- Кнопка запуска -->
+                <button class="play-btn" onclick="launchGame('${game.id}', '${game.title}')">
+                    <i class="fas fa-play"></i> PLAY
+                </button>
+            </div>
+        `;
+        gamesGrid.appendChild(card);
+    });
+}
 
-// --- ЛОГИКА DEEP LINKING ---
-function tryLaunchApp(e) {
-    // Эта функция сработает при нажатии PLAY
-    // Ссылка href="pocketblox://..." попытается открыть приложение
+// --- ЛОГИКА ЗАПУСКА ПРИЛОЖЕНИЯ (DEEP LINKING) ---
+function launchGame(gameId, gameTitle) {
+    const user = auth.currentUser;
     
-    // Если игрок на ПК или приложения нет, можно показать сообщение:
-    setTimeout(function() {
-        if(confirm("App not installed or didn't open? Download APK?")) {
-            window.location.href = "download-apk.html"; // Ссылка на скачивание (нужно создать)
+    if (!user) {
+        alert("Please Log In to play!");
+        openModal('login');
+        return;
+    }
+
+    console.log(`Attempting to launch: ${gameTitle} (ID: ${gameId})`);
+    
+    // 1. Попытка открыть установленное APK приложение
+    // Ссылка формата: pocketblox://play?gameId=...&user=...
+    const deepLink = `pocketblox://play?id=${gameId}&user=${user.uid}`;
+    
+    // Создаем невидимую ссылку и кликаем по ней
+    const a = document.createElement('a');
+    a.href = deepLink;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    
+    // 2. Если приложение не открылось через 2 секунды (например, мы на ПК или нет APK)
+    // Предлагаем скачать или открыть веб-версию
+    setTimeout(() => {
+        const confirmWeb = confirm(`App didn't open. Do you want to play "${gameTitle}" in Browser instead?`);
+        if (confirmWeb) {
+            // Если у тебя есть файл game.html из прошлых шагов
+            // Мы передаем параметры через URL
+            window.location.href = `game.html?id=${gameId}`; 
         }
-    }, 2500);
+    }, 2000);
 }
 
-// UI Функции
+
+// --- 4. УПРАВЛЕНИЕ МОДАЛЬНЫМИ ОКНАМИ ---
+
 function openModal(mode) {
-    modal.style.display = "block";
+    authModal.style.display = "block";
     isRegistering = (mode === 'register');
-    document.getElementById('username').style.display = isRegistering ? 'block' : 'none';
-    document.getElementById('modal-title').innerText = isRegistering ? 'Sign Up' : 'Log In';
-    document.getElementById('auth-action-btn').innerText = isRegistering ? 'Sign Up' : 'Log In';
-    document.getElementById('switch-text').innerText = isRegistering ? 'Have account? Log In' : 'No account? Sign Up';
+    toggleUI();
 }
-function closeModal() { modal.style.display = "none"; }
-function toggleAuthMode() { openModal(isRegistering ? 'login' : 'register'); }
-window.onclick = function(e) { if(e.target == modal) closeModal(); }
+
+function closeModal() {
+    authModal.style.display = "none";
+}
+
+function toggleAuthMode() {
+    isRegistering = !isRegistering;
+    toggleUI();
+}
+
+function toggleUI() {
+    const title = document.getElementById('modal-title');
+    const btn = document.getElementById('auth-action-btn');
+    const switchText = document.getElementById('switch-text');
+    const usernameInput = document.getElementById('username');
+    const errorMsg = document.getElementById('error-msg');
+
+    errorMsg.innerText = ""; // Очистить ошибки
+
+    if (isRegistering) {
+        title.innerText = "Sign Up";
+        btn.innerText = "Create Account";
+        switchText.innerText = "Already have an account? Log In";
+        usernameInput.style.display = "block";
+    } else {
+        title.innerText = "Log In";
+        btn.innerText = "Log In";
+        switchText.innerText = "No account? Sign Up";
+        usernameInput.style.display = "none";
+    }
+}
+
+// Закрытие по клику вне окна
+window.onclick = function(event) {
+    if (event.target == authModal) {
+        closeModal();
+    }
+}
