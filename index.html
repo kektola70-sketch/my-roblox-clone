@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Rublox</title>
+    <title>Rublox: Pizza Tycoon</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 
-    <!-- ЗАСТАВКА -->
+    <!-- ЗАГРУЗКА -->
     <div id="auth-screen">
         <div class="auth-box">
             <h1>Rublox</h1>
-            <div id="loading-text">Загрузка...</div>
+            <div id="loading-text">Загрузка ресурсов...</div>
             <div id="auth-forms" style="display:none;">
                 <input type="email" id="email" placeholder="Email">
                 <input type="password" id="password" placeholder="Пароль">
@@ -48,14 +48,14 @@
         <div id="tab-games" class="tab-content">
             <div class="game-card-big" onclick="startGame()">
                 <div class="icon">🍕</div>
-                <h2>Работа в Пиццерии</h2>
-                <p>Зарплата каждые 10 минут!</p>
+                <h2>Pizza Tycoon</h2>
+                <p>Кассир • Повар • Доставка • Босс</p>
                 <button class="play-btn">ИГРАТЬ</button>
             </div>
         </div>
 
         <div id="tab-shop" class="tab-content" style="display:none;">
-            <h3>Скин</h3>
+            <h3>Скин Персонажа</h3>
             <div id="shop-list" class="shop-grid"></div>
         </div>
     </div>
@@ -65,33 +65,39 @@
         <div class="modal-content">
             <h2>Настройки</h2>
             <div class="setting-item">
-                <span>Тени</span> <input type="checkbox" checked id="opt-shadows">
+                <span>Звуки</span> <input type="checkbox" checked id="opt-sound">
+            </div>
+            <div class="setting-item">
+                <span>Тени (High)</span> <input type="checkbox" checked id="opt-shadows">
             </div>
             <div class="setting-item">
                 <span>Круглый скин (R15)</span> <input type="checkbox" id="opt-round-skin">
             </div>
-            <button onclick="closeSettings()" class="btn-primary">Закрыть</button>
+            <button onclick="closeSettings()" class="btn-primary">Сохранить</button>
         </div>
     </div>
 
     <!-- ИГРА -->
     <div id="game-ui" style="display: none;">
         <div class="game-hud">
-            <div class="hud-item">💰: <span id="game-score">0</span></div>
-            <div class="hud-item">⏰: <span id="pay-timer">10:00</span></div>
-            <button onclick="exitGame()" class="btn-exit">ВЫХОД</button>
+            <div class="hud-item">💼 Очки: <span id="game-score">0</span></div>
+            <div class="hud-item">💰 ЗП: <span id="pay-timer">10:00</span></div>
+            <button onclick="exitGame()" class="btn-exit">МЕНЮ</button>
         </div>
 
-        <!-- ЧАТ (ВЕРНУЛСЯ!) -->
+        <!-- Статус доставки -->
+        <div id="delivery-status" style="display:none;">📦 ПИЦЦА В РУКАХ! (Неси в дом)</div>
+
+        <!-- ЧАТ -->
         <div id="chat-container">
             <div id="chat-messages"></div>
             <div class="chat-input-row">
-                <input type="text" id="chat-input" placeholder="Чат...">
+                <input type="text" id="chat-input" placeholder="...">
                 <button onclick="sendChat()">➤</button>
             </div>
         </div>
 
-        <!-- Интерфейсы работы -->
+        <!-- КАССА -->
         <div id="cashier-ui" style="display:none;">
             <h3>Меню Кассы</h3>
             <div class="cashier-grid">
@@ -103,12 +109,14 @@
             <button onclick="closeUI('cashier-ui')" class="btn-close">Закрыть</button>
         </div>
 
+        <!-- Кнопка E -->
         <button id="action-btn" style="display:none;" onclick="doSimpleJob()">E</button>
 
         <div id="joystick-zone"></div>
         <div id="btnJump">⬆️</div>
     </div>
 
+    <!-- БИБЛИОТЕКИ -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
