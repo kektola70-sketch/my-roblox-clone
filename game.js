@@ -1,4 +1,4 @@
-// --- FIREBASE ---
+// --- КОНФИГ ---
 const firebaseConfig = {
   apiKey: "AIzaSyB_1fSgljQJV73dVAt1H-Atvr4j1MGJDiA",
   authDomain: "pocketblox-e1290.firebaseapp.com",
@@ -18,8 +18,10 @@ let currentUser = null;
 let userData = { username: "Guest", currency: 0, skinColor: "#0000FF" };
 let gameActive = false;
 let joystickManager = null;
-let workPoints = 0; // Зарплата (Очки)
-let salaryTimer = 1200; // 20 минут в секундах (поставим меньше для теста, но можно 1200)
+let workPoints = 0;
+let salaryTimer = 600; // 10 минут (600 сек)
+let collidables = []; // Стены и мебель (Хитбоксы)
+let isRoundSkin = false; // Настройка скина
 
 // --- АВТОРИЗАЦИЯ ---
 auth.onAuthStateChanged(user => {
@@ -28,7 +30,7 @@ auth.onAuthStateChanged(user => {
         document.getElementById('loading-text').style.display='none';
         db.ref('users/' + user.uid).on('value', snap => {
             userData = snap.val() || userData;
-            updateMenuUI();
+            updateMenu();
         });
     } else {
         document.getElementById('loading-text').style.display='none';
@@ -40,13 +42,13 @@ function login() { auth.signInWithEmailAndPassword(document.getElementById('emai
 function register() { 
     const n = document.getElementById('username').value;
     auth.createUserWithEmailAndPassword(document.getElementById('email').value, document.getElementById('password').value).then(c => {
-        db.ref('users/'+c.user.uid).set({username:n, currency:0, skinColor:"#0000FF"});
+        db.ref('users/'+c.user.uid).set({username:n, currency:100, skinColor:"#0000FF"});
     }).catch(e=>alert(e.message)); 
 }
 function logout() { auth.signOut(); location.reload(); }
 
-// --- МЕНЮ И МАГАЗИН ---
-function updateMenuUI() {
+// --- МЕНЮ ---
+function updateMenu() {
     document.getElementById('auth-screen').style.display='none';
     document.getElementById('dashboard').style.display='flex';
     document.getElementById('dash-username').innerText = userData.username;
@@ -54,46 +56,60 @@ function updateMenuUI() {
     document.getElementById('dash-avatar').innerText = userData.username[0];
     
     // Магазин
-    const items = [ {c:"#0000FF",p:0,n:"Blue"}, {c:"#FF0000",p:50,n:"Red"}, {c:"#000000",p:100,n:"Black"} ];
+    const items = [ {c:"#0000FF",p:0,n:"Синий"}, {c:"#FF0000",p:50,n:"Красный"}, {c:"#000000",p:100,n:"Черный"}, {c:"#FFFFFF",p:200,n:"Белый"} ];
     const list = document.getElementById('shop-list'); list.innerHTML='';
     items.forEach(i => {
         const owned = userData.skinColor === i.c;
         list.innerHTML += `<div class="shop-item">
             <div style="height:40px;background:${i.c};margin-bottom:5px;"></div>
             <b>${i.n}</b>
-            <button class="btn-buy" onclick="${owned?'':`buy('${i.c}',${i.p})`}">${owned?'OWNED':i.p+' R$'}</button>
+            <button class="btn-buy" onclick="${owned?'':`buy('${i.c}',${i.p})`}">${owned?'КУПЛЕНО':i.p+' R$'}</button>
         </div>`;
     });
 }
 function buy(color, price) {
     if(userData.currency>=price) db.ref('users/'+currentUser.uid).update({currency:userData.currency-price, skinColor:color});
-    else alert('Need more money!');
+    else alert('Недостаточно R$!');
+}
+function switchTab(t) {
+    document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('tab-'+t).style.display='block';
+    // Простая логика подсветки
+    if(t==='games') document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    else document.querySelectorAll('.tab-btn')[1].classList.add('active');
 }
 
-// --- ИГРА: PIZZA WORK ---
+// Настройки
+function openSettings() { document.getElementById('settings-modal').style.display='flex'; }
+function closeSettings() { 
+    document.getElementById('settings-modal').style.display='none';
+    isRoundSkin = document.getElementById('opt-round-skin').checked;
+}
+
+// --- ИГРА: ПИЦЦЕРИЯ ---
 function startGame() {
     gameActive = true;
     document.getElementById('dashboard').style.display='none';
     document.getElementById('game-ui').style.display='block';
     workPoints = 0;
-    salaryTimer = 20 * 60; // 20 минут (1200 сек)
-    updateHUD();
+    salaryTimer = 600; 
+    collidables = [];
     
-    // Запускаем таймер зарплаты
-    setInterval(() => {
-        if(!gameActive) return;
+    // Таймер Зарплаты
+    const timerInterval = setInterval(() => {
+        if(!gameActive) { clearInterval(timerInterval); return; }
         salaryTimer--;
         if(salaryTimer <= 0) {
-            // Выплата зарплаты!
-            const salary = Math.floor(workPoints / 100); // 100 очков = 1 R$
+            const salary = Math.floor(workPoints / 10); // 10 очков = 1 R$
             if(salary > 0) {
                 db.ref('users/'+currentUser.uid).update({currency: userData.currency + salary});
-                alert(`PAYCHECK! You earned ${salary} R$`);
+                alert(`ЗАРПЛАТА! Вы заработали ${salary} R$`);
                 workPoints = 0;
             } else {
-                alert("Paycheck! You didn't work enough.");
+                alert("Зарплата пришла, но вы не работали!");
             }
-            salaryTimer = 20 * 60;
+            salaryTimer = 600;
         }
         updateHUD();
     }, 1000);
@@ -108,194 +124,250 @@ function updateHUD() {
     document.getElementById('pay-timer').innerText = `${m}:${s<10?'0'+s:s}`;
 }
 
+// Работа
 function doJob(type) {
-    // Работа кассира
     workPoints += 10;
-    alert("Order taken: " + type + " (+10 pts)");
     document.getElementById('cashier-ui').style.display='none';
+    // Эффект всплывающего текста
+    const btn = document.createElement('div');
+    btn.innerText = "+10 Очков";
+    btn.style.cssText = "position:absolute; top:40%; left:50%; color:gold; font-size:24px; font-weight:bold; transform:translate(-50%,-50%); transition:1s;";
+    document.body.appendChild(btn);
+    setTimeout(() => { btn.style.top="30%"; btn.style.opacity="0"; }, 50);
+    setTimeout(() => btn.remove(), 1000);
     updateHUD();
 }
-
-function doSimpleJob() {
-    // Повар / Упаковщик
-    workPoints += 10;
-    // Анимация текста
-    const btn = document.getElementById('action-btn');
-    const prevText = btn.innerText;
-    btn.innerText = "+10 pts";
-    setTimeout(()=>btn.innerText=prevText, 500);
-    updateHUD();
-}
-
+function doSimpleJob() { doJob('work'); }
 function closeUI(id) { document.getElementById(id).style.display='none'; }
 function exitGame() { location.reload(); }
 
-// --- 3D МИР ---
+// --- 3D ДВИЖОК ---
 function init3D() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = document.getElementById('opt-shadows').checked;
     document.body.appendChild(renderer.domElement);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(20,50,10); dl.castShadow=true; scene.add(dl);
+    const dl = new THREE.DirectionalLight(0xffffff, 0.7); dl.position.set(20,50,20); 
+    if(renderer.shadowMap.enabled) dl.castShadow=true; scene.add(dl);
 
-    // --- ПОСТРОЙКА ПИЦЦЕРИИ ---
-    const walls = [];
-    const interactions = []; // Зоны для работы
+    // Зоны взаимодействия
+    const interactions = [];
 
-    // Пол (Трава)
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({color:0x44aa44}));
+    // --- СТРОИТЕЛЬСТВО ПИЦЦЕРИИ ---
+    
+    // Трава (Улица)
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.MeshStandardMaterial({color:0x33aa33}));
     grass.rotation.x = -Math.PI/2; scene.add(grass);
 
-    // Пол (Пиццерия)
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(40,30), new THREE.MeshStandardMaterial({color:0xaaaaaa})); // Серый бетон
-    floor.rotation.x = -Math.PI/2; floor.position.y=0.01; scene.add(floor);
-
-    // Функция создания стены
-    function createWall(w, h, d, x, z, col=0xaa4444) {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({color:col}));
-        mesh.position.set(x, h/2, z); mesh.castShadow=true; mesh.receiveShadow=true;
-        scene.add(mesh); walls.push(mesh);
+    // Функция Стены (С Хитбоксом)
+    function createBox(w, h, d, x, z, col=0xF5F5DC, isWall=true) {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mat = new THREE.MeshStandardMaterial({color:col});
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, h/2, z);
+        if(renderer.shadowMap.enabled) { mesh.castShadow=true; mesh.receiveShadow=true; }
+        scene.add(mesh);
+        if(isWall) collidables.push(new THREE.Box3().setFromObject(mesh)); // Добавляем в коллизию
+        return mesh;
     }
 
-    // Стены здания
-    createWall(40, 6, 1, 0, -15); // Задняя
-    createWall(1, 6, 30, -20, 0); // Левая
-    createWall(1, 6, 30, 20, 0);  // Правая
-    createWall(15, 6, 1, -12.5, 15); // Передняя левая
-    createWall(15, 6, 1, 12.5, 15);  // Передняя правая (Вход по центру пустой)
+    // Пол здания (Плитка)
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(60,60), new THREE.MeshStandardMaterial({color:0xCCCCCC}));
+    floor.rotation.x = -Math.PI/2; floor.position.y=0.02; scene.add(floor);
 
-    // Прилавки и оборудование
-    // 1. КАССА (Спереди)
-    const register = new THREE.Mesh(new THREE.BoxGeometry(6, 1.5, 2), new THREE.MeshStandardMaterial({color:0xffffff}));
-    register.position.set(5, 0.75, 5); scene.add(register);
-    const regMachine = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 1), new THREE.MeshStandardMaterial({color:0x333333}));
-    regMachine.position.set(5, 1.7, 5); scene.add(regMachine);
-    interactions.push({ pos: new THREE.Vector3(5,0,7), type: 'cashier', radius: 4 });
-
-    // 2. ПЕЧИ (Сзади)
-    const oven = new THREE.Mesh(new THREE.BoxGeometry(8, 3, 3), new THREE.MeshStandardMaterial({color:0x222222}));
-    oven.position.set(-10, 1.5, -12); scene.add(oven);
-    interactions.push({ pos: new THREE.Vector3(-10,0,-9), type: 'cook', radius: 4 });
-
-    // 3. СТОЛ УПАКОВКИ (Слева)
-    const table = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 6), new THREE.MeshStandardMaterial({color:0x8B4513}));
-    table.position.set(-17, 0.75, 0); scene.add(table);
-    // Коробки на столе
-    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1), new THREE.MeshStandardMaterial({color:0xffffff}));
-    box.position.set(-17, 1.6, 0); scene.add(box);
-    interactions.push({ pos: new THREE.Vector3(-14,0,0), type: 'box', radius: 4 });
-
-
-    // --- ПЕРСОНАЖ (С РУКАМИ И НОГАМИ) ---
-    const player = new THREE.Group();
-    // Тело
-    const bodyMat = new THREE.MeshStandardMaterial({color: userData.skinColor}); // Цвет из магазина
-    const skinMat = new THREE.MeshStandardMaterial({color: 0xFFD700}); // Желтая кожа
-    const legsMat = new THREE.MeshStandardMaterial({color: 0x228B22}); // Зеленые штаны
-
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), skinMat); head.position.y=3.5;
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(2,2,1), bodyMat); torso.position.y=2;
+    // Внешние стены (Высота 8, Оставляем дырку для двери)
+    createBox(60, 8, 2, 0, -30); // Задняя
+    createBox(2, 8, 60, -30, 0); // Левая
+    createBox(2, 8, 60, 30, 0);  // Правая
+    createBox(25, 8, 2, -17.5, 30); // Передняя Левая
+    createBox(25, 8, 2, 17.5, 30);  // Передняя Правая
     
-    // Группы для анимации конечностей
-    const lLegG = new THREE.Group(); 
-    const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), legsMat); lLeg.position.y=-1; 
-    lLegG.add(lLeg); lLegG.position.set(-0.5,1,0);
+    // Внутренние стены (Разделение комнат)
+    // 1. Стена между Залом и Кухней
+    createBox(60, 8, 2, 0, 0, 0xEEDDCC);
+    // Проход на кухню (Дырка в стене - просто не ставим блок посередине)
+    
+    // 2. Стена Менеджера (Справа сзади)
+    createBox(2, 8, 20, 15, -20, 0xEEDDCC);
+    createBox(15, 8, 2, 22.5, -10, 0xEEDDCC);
 
-    const rLegG = new THREE.Group(); 
-    const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), legsMat); rLeg.position.y=-1; 
-    rLegG.add(rLeg); rLegG.position.set(0.5,1,0);
+    // --- МЕБЕЛЬ (ТОЖЕ ХИТБОКСЫ) ---
+    
+    // Прилавок (Спереди) - 2 Кассы
+    createBox(40, 2, 3, 0, 10, 0xFFFFFF); // Длинный прилавок
+    
+    // Касса 1
+    createBox(2, 1, 2, -10, 11.5, 0x333333, false);
+    interactions.push({pos: new THREE.Vector3(-10,0,13), type:'cashier', radius:4});
+    // Касса 2
+    createBox(2, 1, 2, 10, 11.5, 0x333333, false);
+    interactions.push({pos: new THREE.Vector3(10,0,13), type:'cashier', radius:4});
 
-    const lArmG = new THREE.Group(); 
-    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), skinMat); lArm.position.y=-1; 
-    lArmG.add(lArm); lArmG.position.set(-1.5,3,0);
+    // Кухня (Печи)
+    createBox(10, 4, 4, -15, -28, 0x111111); // Печь 1
+    interactions.push({pos: new THREE.Vector3(-15,0,-24), type:'cook', radius:5, label:"ГОТОВИТЬ"});
+    
+    // Упаковка (Стол с коробками)
+    createBox(8, 2, 4, -25, -5, 0x8B4513); // Стол
+    createBox(2, 1, 2, -25, -2, 0xFFFFFF, false); // Коробка
+    interactions.push({pos: new THREE.Vector3(-22,0,-5), type:'box', radius:4, label:"УПАКОВАТЬ"});
 
-    const rArmG = new THREE.Group(); 
-    const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.9,2,0.9), skinMat); rArm.position.y=-1; 
-    rArmG.add(rArm); rArmG.position.set(1.5,3,0);
+    // Стол менеджера
+    createBox(6, 2, 4, 25, -25, 0x552200); 
 
-    player.add(head, torso, lLegG, rLegG, lArmG, rArmG);
-    player.userData = { lg:lLegG, rg:rLegG, la:lArmG, ra:rArmG };
-    scene.add(player); camera.position.set(0,8,-12);
+    // --- ПЕРСОНАЖ ---
+    const player = new THREE.Group();
+    const skinMat = new THREE.MeshStandardMaterial({color: 0xFFD700});
+    const bodyMat = new THREE.MeshStandardMaterial({color: userData.skinColor});
+    const pantsMat = new THREE.MeshStandardMaterial({color: 0x228B22});
 
-    // УПРАВЛЕНИЕ
-    let moveFwd=0, moveTurn=0;
+    if (isRoundSkin) {
+        // Округлый скин (R15 style)
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.7), skinMat); head.position.y=3.8;
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2), bodyMat); torso.position.y=2.2;
+        
+        // Плечи и руки
+        const armGeo = new THREE.CapsuleGeometry(0.35, 1.5);
+        const lArm = new THREE.Mesh(armGeo, skinMat); lArm.position.set(-1.4, 3, 0);
+        const rArm = new THREE.Mesh(armGeo, skinMat); rArm.position.set(1.4, 3, 0);
+        
+        // Ноги
+        const legGeo = new THREE.CapsuleGeometry(0.4, 1.8);
+        const lLeg = new THREE.Mesh(legGeo, pantsMat); lLeg.position.set(-0.5, 0.9, 0);
+        const rLeg = new THREE.Mesh(legGeo, pantsMat); rLeg.position.set(0.5, 0.9, 0);
+
+        player.add(head, torso, lArm, rArm, lLeg, rLeg);
+        player.userData = { la:lArm, ra:rArm, ll:lLeg, rl:rLeg, type:'round' };
+    } else {
+        // Квадратный скин (R6 style)
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2), skinMat); head.position.y=4.6;
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(2,2,1), bodyMat); torso.position.y=3;
+        
+        const armGeo = new THREE.BoxGeometry(1,2,1);
+        const lArm = new THREE.Mesh(armGeo, skinMat); lArm.position.set(-1.5,3,0);
+        const rArm = new THREE.Mesh(armGeo, skinMat); rArm.position.set(1.5,3,0);
+        
+        const legGeo = new THREE.BoxGeometry(1,2,1);
+        const lLeg = new THREE.Mesh(legGeo, pantsMat); lLeg.position.set(-0.5,1,0);
+        const rLeg = new THREE.Mesh(legGeo, pantsMat); rLeg.position.set(0.5,1,0);
+
+        player.add(head, torso, lArm, rArm, lLeg, rLeg);
+        player.userData = { la:lArm, ra:rArm, ll:lLeg, rl:rLeg, type:'box' };
+    }
+
+    scene.add(player); camera.position.set(0,8,20); // Начало на улице перед входом
+
+    // --- NPC (ПОСЕТИТЕЛИ) ---
+    const npcs = [];
+    function createNPC() {
+        const npc = new THREE.Group();
+        const mat = new THREE.MeshStandardMaterial({color: Math.random()*0xffffff});
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,2), mat); b.position.y=1;
+        const h = new THREE.Mesh(new THREE.SphereGeometry(0.4), new THREE.MeshStandardMaterial({color:0xffd700})); h.position.y=2.2;
+        npc.add(b,h);
+        npc.position.set((Math.random()-0.5)*10, 0, 40); // Спавн на улице
+        scene.add(npc);
+        npcs.push({mesh:npc, target: new THREE.Vector3((Math.random()-0.5)*10, 0, 14), state:'walking'}); // Идут к кассам
+    }
+    // Создаем 3 NPC
+    createNPC(); createNPC(); createNPC();
+
+    // --- УПРАВЛЕНИЕ ---
+    let moveFwd=0, moveTurn=0, vy=0;
     const z = document.getElementById('joystick-zone'); z.innerHTML='';
-    joystickManager = nipplejs.create({zone:z, mode:'static', position:{left:'50%', top:'50%'}, color:'white'});
+    joystickManager = nipplejs.create({zone:z, mode:'static', position:{left:'50%', top:'50%'}, color:'white', size: 100});
     joystickManager.on('move', (e,d) => {
-        moveFwd = Math.sin(d.angle.radian)*Math.min(d.force,2)*0.1;
+        moveFwd = Math.sin(d.angle.radian)*Math.min(d.force,2)*0.15;
         moveTurn = Math.cos(d.angle.radian)*0.08;
     });
     joystickManager.on('end', () => {moveFwd=0; moveTurn=0;});
-
-    let vy=0;
     document.getElementById('btnJump').addEventListener('touchstart', e=>{e.preventDefault(); if(player.position.y<=0.1) vy=0.3;});
 
-
-    // --- ИГРОВОЙ ЦИКЛ ---
-    function checkInteractions() {
-        let activeZone = null;
-        interactions.forEach(zone => {
-            if(player.position.distanceTo(zone.pos) < zone.radius) {
-                activeZone = zone.type;
+    // ФИЗИКА КОЛЛИЗИЙ (СТЕНЫ)
+    function resolveCollision(newPos) {
+        const playerBox = new THREE.Box3().setFromCenterAndSize(newPos, new THREE.Vector3(1, 2, 1));
+        for(let wallBox of collidables) {
+            if(playerBox.intersectsBox(wallBox)) {
+                return true; // Столкновение!
             }
-        });
-
-        const cashierUI = document.getElementById('cashier-ui');
-        const actionBtn = document.getElementById('action-btn');
-
-        // Логика UI
-        if (activeZone === 'cashier') {
-            if(cashierUI.style.display === 'none') cashierUI.style.display = 'block';
-            actionBtn.style.display = 'none';
-        } else if (activeZone === 'cook') {
-            cashierUI.style.display = 'none';
-            actionBtn.style.display = 'flex';
-            actionBtn.innerText = "COOK";
-        } else if (activeZone === 'box') {
-            cashierUI.style.display = 'none';
-            actionBtn.style.display = 'flex';
-            actionBtn.innerText = "BOX";
-        } else {
-            // Если отошли
-            cashierUI.style.display = 'none';
-            actionBtn.style.display = 'none';
         }
+        return false; // Путь свободен
     }
 
     function animate() {
         if(!gameActive) return;
         requestAnimationFrame(animate);
 
-        // Движение
+        // Расчет движения
         if(moveFwd!==0) {
-            player.translateZ(moveFwd);
+            // Пробуем шагнуть вперед
+            const nextPos = player.position.clone();
+            nextPos.z += Math.cos(player.rotation.y) * moveFwd;
+            nextPos.x += Math.sin(player.rotation.y) * moveFwd;
+
+            if(!resolveCollision(nextPos)) {
+                player.position.copy(nextPos);
+            }
             player.rotation.y -= moveTurn;
+            
+            // Анимация
             const t = Date.now()*0.015;
-            player.userData.lg.rotation.x = Math.sin(t);
-            player.userData.rg.rotation.x = -Math.sin(t);
-            player.userData.la.rotation.x = -Math.sin(t);
-            player.userData.ra.rotation.x = Math.sin(t);
-        } else {
-            player.userData.lg.rotation.x=0; player.userData.rg.rotation.x=0;
-            player.userData.la.rotation.x=0; player.userData.ra.rotation.x=0;
+            if(player.userData.type === 'round') {
+                player.userData.ll.rotation.x = Math.sin(t)*0.5;
+                player.userData.rl.rotation.x = -Math.sin(t)*0.5;
+            } else {
+                player.userData.ll.rotation.x = Math.sin(t);
+                player.userData.rl.rotation.x = -Math.sin(t);
+            }
         }
 
         // Гравитация
         if(player.position.y>0 || vy>0) { player.position.y+=vy; vy-=0.015; }
         else { player.position.y=0; vy=0; }
 
-        // Проверка работы
-        checkInteractions();
+        // Логика NPC
+        npcs.forEach(bot => {
+            if(bot.state === 'walking') {
+                const dir = new THREE.Vector3().subVectors(bot.target, bot.mesh.position).normalize();
+                bot.mesh.position.add(dir.multiplyScalar(0.03));
+                if(bot.mesh.position.distanceTo(bot.target) < 1) {
+                    bot.state = 'waiting';
+                    setTimeout(() => {
+                        bot.target.set((Math.random()-0.5)*40, 0, 40 + Math.random()*10); // Уходят
+                        bot.state = 'walking';
+                    }, 5000);
+                }
+            }
+        });
+
+        // Проверка Работы (Зоны)
+        let activeUI = null;
+        interactions.forEach(zone => {
+            if(player.position.distanceTo(zone.pos) < zone.radius) activeUI = zone;
+        });
+
+        if (activeUI) {
+            if(activeUI.type==='cashier') document.getElementById('cashier-ui').style.display = 'block';
+            else {
+                document.getElementById('cashier-ui').style.display='none';
+                const btn = document.getElementById('action-btn');
+                btn.style.display='flex';
+                btn.innerText = activeUI.label;
+            }
+        } else {
+            document.getElementById('cashier-ui').style.display='none';
+            document.getElementById('action-btn').style.display='none';
+        }
 
         // Камера
         const o = new THREE.Vector3(0,7,-10).applyMatrix4(player.matrixWorld);
         camera.position.lerp(o, 0.1);
-        camera.lookAt(player.position.x, player.position.y+2, player.position.z);
+        camera.lookAt(player.position.x, player.position.y+3, player.position.z);
         
         renderer.render(scene, camera);
     }
